@@ -1,0 +1,2166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b0d12">
+<title>Meme Carver · seam-carving meme generator</title>
+<link rel="icon" id="favicon" href="data:,">
+<style>
+  :root{
+    --bg:#0b0d12; --surface:rgba(255,255,255,.045); --surface2:rgba(255,255,255,.07);
+    --border:rgba(255,255,255,.09); --border-hi:rgba(255,255,255,.18);
+    --txt:#e9ecf4; --dim:#98a1b3; --faint:#5c6577;
+    --acc1:#8b5cf6; --acc2:#22d3ee; --acc3:#f472b6;
+    --grad:linear-gradient(120deg,#8b5cf6,#22d3ee);
+    --danger:#fb7185; --ok:#34d399;
+    --r:16px; --r-sm:10px;
+    --mono:ui-monospace,'Cascadia Code',Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--txt); min-height:100vh;
+    font-family:"Segoe UI Variable Text","Segoe UI",Inter,system-ui,-apple-system,Roboto,sans-serif;
+    font-size:14.5px; line-height:1.5; overflow-x:hidden;
+  }
+  ::selection{background:rgba(139,92,246,.45)}
+
+  /* ambient background */
+  .bg{position:fixed; inset:0; z-index:-2; background:
+      radial-gradient(900px 600px at 12% -8%, rgba(139,92,246,.16), transparent 60%),
+      radial-gradient(800px 600px at 105% 12%, rgba(34,211,238,.11), transparent 60%),
+      radial-gradient(700px 700px at 50% 115%, rgba(244,114,182,.09), transparent 60%),
+      var(--bg);}
+  .bg::after{content:""; position:absolute; inset:0;
+      background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
+                       linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+      background-size:44px 44px; mask-image:radial-gradient(ellipse at 50% 20%, #000 30%, transparent 75%);}
+  @media (prefers-reduced-motion:no-preference){
+    .bg::before{content:""; position:absolute; width:60vmax; height:60vmax; left:-15vmax; top:-15vmax;
+      background:conic-gradient(from 0deg, rgba(139,92,246,.05), transparent 30%, rgba(34,211,238,.05) 55%, transparent 80%, rgba(139,92,246,.05));
+      border-radius:50%; filter:blur(40px); animation:spin 90s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg)}}
+  }
+
+  .wrap{max-width:1280px; margin:0 auto; padding:28px 28px 40px}
+
+  /* header */
+  header.top{display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:26px; flex-wrap:wrap}
+  .brand{display:flex; align-items:center; gap:14px}
+  .logo{width:46px;height:46px;border-radius:13px;background:var(--grad);display:grid;place-items:center;
+        box-shadow:0 8px 28px rgba(139,92,246,.35), inset 0 0 0 1px rgba(255,255,255,.22); flex:none}
+  .logo svg{width:26px;height:26px}
+  h1{font-size:26px;margin:0;font-weight:700;letter-spacing:.2px}
+  h1 b{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:800}
+  .tagline{margin:2px 0 0;color:var(--dim);font-size:13px}
+  .head-chip{font-family:var(--mono);font-size:11.5px;color:var(--dim);border:1px solid var(--border);
+      border-radius:999px;padding:6px 14px;background:var(--surface)}
+  .head-chip em{color:var(--acc2);font-style:normal}
+
+  /* layout */
+  .grid{display:grid; grid-template-columns:400px minmax(0,1fr); gap:22px; align-items:start}
+  @media (max-width:1020px){.grid{grid-template-columns:1fr}}
+  .col{display:flex;flex-direction:column;gap:22px;min-width:0}
+
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:var(--r);
+        backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+        box-shadow:0 20px 50px rgba(0,0,0,.35)}
+  /* keep tooltips from the controls card above the preview column
+     (backdrop-filter gives each card its own stacking context) */
+  .controls{position:relative; z-index:2}
+  .card-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 0}
+  .card-title{font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--dim)}
+  .card-body{padding:16px 20px 20px;display:flex;flex-direction:column;gap:16px}
+
+  /* dropzone */
+  .drop{border:1.5px dashed rgba(255,255,255,.18); border-radius:12px; padding:22px 16px; text-align:center;
+        cursor:pointer; transition:border-color .18s, background .18s; outline:none; position:relative}
+  .drop:hover,.drop:focus-visible{border-color:var(--acc1); background:rgba(139,92,246,.06)}
+  .drop.drag{border-color:var(--acc2); background:rgba(34,211,238,.08); transform:scale(1.005)}
+  .drop svg{width:30px;height:30px;opacity:.85;margin-bottom:6px}
+  .drop .d-main{font-weight:600}
+  .drop .d-sub{color:var(--dim);font-size:12.5px;margin-top:3px}
+  .drop .d-name{font-family:var(--mono);font-size:12px;color:var(--acc2);margin-top:6px;word-break:break-all;display:none}
+  .drop.hasfile .d-name{display:block}
+  .sample-link{display:block;margin:8px auto 0;background:none;border:none;color:var(--faint);font-size:12px;cursor:pointer;text-decoration:underline dotted;padding:0}
+  .sample-link:hover{color:var(--acc2)}
+
+  /* fields */
+  .field{display:flex;flex-direction:column;gap:8px}
+  .field>label,.flabel{font-size:12.5px;font-weight:600;color:var(--dim);letter-spacing:.3px;display:flex;align-items:center;gap:6px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .perm-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px 10px;margin-top:2px}
+  .check{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--dim);cursor:pointer;user-select:none}
+  .check:hover{color:var(--txt)}
+  .check input{appearance:none;-webkit-appearance:none;width:15px;height:15px;border:1px solid var(--border-hi);border-radius:4px;background:#0d1017;cursor:pointer;position:relative;flex:none;margin:0;transition:all .15s}
+  .check input:checked{background:var(--acc1);border-color:var(--acc1)}
+  .check input:checked::after{content:"";position:absolute;left:4.5px;top:1.5px;width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+  .check input:focus-visible{box-shadow:0 0 0 3px rgba(34,211,238,.4)}
+  .inwrap{position:relative;display:flex;align-items:center}
+  input[type=number],input[type=text],select{
+    width:100%; background:#0d1017; color:var(--txt); border:1px solid var(--border); border-radius:var(--r-sm);
+    padding:9px 12px; font-size:14px; font-family:inherit; transition:border-color .15s, box-shadow .15s; outline:none;}
+  input:focus,select:focus{border-color:var(--acc1); box-shadow:0 0 0 3px rgba(139,92,246,.22)}
+  select{appearance:none;-webkit-appearance:none;cursor:pointer;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2398a1b3' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 12px center;padding-right:30px}
+  .suffix{position:absolute;right:12px;color:var(--faint);font-size:12px;pointer-events:none;font-family:var(--mono)}
+
+  /* range */
+  input[type=range]{-webkit-appearance:none;width:100%;height:22px;background:transparent;cursor:pointer;margin:0}
+  input[type=range]::-webkit-slider-runnable-track{height:5px;border-radius:99px;background:linear-gradient(90deg,var(--acc1) var(--fill,0%),#232837 var(--fill,0%))}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:17px;height:17px;border-radius:50%;margin-top:-6px;
+    background:#fff;border:none;box-shadow:0 2px 8px rgba(0,0,0,.5),0 0 0 4px rgba(139,92,246,.35)}
+  input[type=range]::-moz-range-track{height:5px;border-radius:99px;background:#232837}
+  input[type=range]::-moz-range-progress{height:5px;border-radius:99px;background:var(--grad)}
+  input[type=range]::-moz-range-thumb{width:17px;height:17px;border-radius:50%;background:#fff;border:none;box-shadow:0 0 0 4px rgba(139,92,246,.35)}
+
+  /* segmented */
+  .seg{display:flex;background:#0d1017;border:1px solid var(--border);border-radius:999px;padding:3px;gap:2px}
+  .seg label{position:relative;cursor:pointer;flex:1;display:flex}
+  .seg input{position:absolute;opacity:0;pointer-events:none}
+  .seg span{flex:1;display:block;text-align:center;padding:6px 10px;border-radius:999px;font-size:13px;color:var(--dim);transition:all .18s;white-space:nowrap;user-select:none}
+  .seg input:checked+span{background:var(--grad);color:#fff;font-weight:600;box-shadow:0 3px 12px rgba(139,92,246,.4)}
+  .seg input:not(:disabled)+span:hover{color:var(--txt)}
+  .seg input:focus-visible+span{box-shadow:0 0 0 3px rgba(34,211,238,.4)}
+
+  /* switch */
+  .switchrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:2px 0}
+  .sw{position:relative;display:inline-block;flex:none}
+  .sw input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+  .sw i{display:block;width:38px;height:22px;border-radius:99px;background:#232837;border:1px solid var(--border);transition:all .18s;position:relative}
+  .sw i::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#8b93a7;transition:all .18s}
+  .sw input:checked+i{background:linear-gradient(120deg,rgba(139,92,246,.85),rgba(34,211,238,.85));border-color:transparent}
+  .sw input:checked+i::after{left:18px;background:#fff}
+  .sw input:focus-visible+i{box-shadow:0 0 0 3px rgba(34,211,238,.4)}
+
+  /* tooltips */
+  [data-tip]{position:relative}
+  [data-tip]:hover::after,[data-tip]:focus-visible::after{
+    content:attr(data-tip);position:absolute;left:0;top:calc(100% + 8px);z-index:50;
+    background:#171b26;color:var(--txt);border:1px solid var(--border-hi);border-radius:9px;
+    padding:8px 11px;font-size:12px;line-height:1.45;font-weight:400;white-space:pre-line;
+    width:max-content;max-width:280px;text-align:left;pointer-events:none;
+    box-shadow:0 10px 30px rgba(0,0,0,.5);animation:tipin .14s ease-out}
+  @keyframes tipin{from{opacity:0;transform:translateY(-3px)}to{opacity:1}}
+
+  hr.sep{border:none;border-top:1px solid var(--border);margin:2px 0}
+
+  /* buttons */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:var(--r-sm);
+    font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;border:1px solid transparent;
+    padding:10px 18px;transition:all .16s;user-select:none}
+  .btn svg{width:16px;height:16px;flex:none}
+  .btn-primary{background:var(--grad);color:#fff;box-shadow:0 6px 22px rgba(139,92,246,.42)}
+  .btn-primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 10px 28px rgba(139,92,246,.55)}
+  .btn-primary:active:not(:disabled){transform:translateY(0)}
+  .btn-primary:disabled{opacity:.55;cursor:not-allowed;filter:saturate(.4)}
+  .btn-ghost{background:var(--surface);color:var(--txt);border-color:var(--border)}
+  .btn-ghost:hover:not(:disabled){border-color:var(--border-hi);background:var(--surface2)}
+  .btn-ghost:disabled{opacity:.45;cursor:not-allowed}
+  .btn-danger{background:rgba(251,113,133,.12);color:var(--danger);border-color:rgba(251,113,133,.35)}
+  .btn-danger:hover{background:rgba(251,113,133,.2)}
+  .carve-row{display:flex;gap:10px}
+  .carve-row .btn-primary{flex:1;font-size:15px;padding:12px}
+  #cancelBtn{display:none}
+  .running #cancelBtn{display:inline-flex}
+  .running #carveBtn{display:none}
+
+  #status{min-height:20px;font-size:13px;color:var(--dim);text-align:center;transition:color .2s}
+  #status.err{color:var(--danger)} #status.ok{color:var(--ok)}
+
+  /* preview stages */
+  .stage{position:relative;background:
+      repeating-conic-gradient(rgba(255,255,255,.028) 0% 25%, transparent 0% 50%) 0 0/22px 22px,
+      #0a0c11;
+    border:1px solid var(--border); border-radius:12px; min-height:240px;
+    display:grid; place-items:center; overflow:hidden}
+  .stage canvas{max-width:100%; max-height:430px; display:block; image-rendering:auto}
+  .stage .empty{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:8px; color:var(--faint); text-align:center; padding:20px; pointer-events:none}
+  .stage .empty svg{width:34px;height:34px;opacity:.5}
+  .stage.filled .empty{display:none}
+  .chip{font-family:var(--mono);font-size:11px;color:var(--dim);background:var(--surface);border:1px solid var(--border);
+    border-radius:999px;padding:3px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%}
+  .chip:empty{display:none}
+
+  .progress{position:absolute; left:0; right:0; bottom:0; top:auto; display:none;
+    flex-direction:column; gap:6px; padding:12px 14px;
+    background:linear-gradient(transparent, rgba(8,10,15,.88) 40%)}
+  .progress.on{display:flex}
+  .bar{height:6px;border-radius:99px;background:#20242f;overflow:hidden}
+  .bar i{display:block;height:100%;width:0%;background:var(--grad);border-radius:99px;transition:width .25s ease}
+  .ptext{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);font-family:var(--mono)}
+  .stage.dimmed canvas{opacity:.25;filter:saturate(.6)}
+  .stage.dimmed .progress{display:flex}
+
+  .actions{display:flex;gap:10px;flex-wrap:wrap}
+  .actions .btn{flex:1;min-width:150px}
+
+  footer{margin-top:30px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;
+    color:var(--faint);font-size:12.5px}
+  footer .f-right{display:flex;align-items:center;gap:10px}
+  code.k{font-family:var(--mono);font-size:11.5px;background:var(--surface);border:1px solid var(--border);padding:2px 7px;border-radius:6px;color:var(--dim)}
+
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+  .shake{animation:shake .22s ease-in-out 2}
+</style>
+</head>
+<body>
+<div class="bg"></div>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round">
+          <path d="M4 3c3 3-3 6 0 9s-3 6 0 9"/><path d="M10 3c3 3-3 6 0 9s-3 6 0 9" opacity=".66"/><path d="M16 3c3 3-3 6 0 9s-3 6 0 9" opacity=".33"/>
+        </svg>
+      </div>
+      <div>
+        <h1>Meme<b>Carver</b></h1>
+        <p class="tagline">content-aware seam-carving memes · runs entirely in your browser</p>
+      </div>
+    </div>
+    <span class="head-chip">no uploads · no servers · <em>one file</em></span>
+  </header>
+
+  <main class="grid">
+    <!-- ===================== CONTROLS ===================== -->
+    <section class="card controls" aria-label="Controls">
+      <div class="card-head"><span class="card-title">Carve settings</span></div>
+      <div class="card-body">
+
+        <div class="field">
+          <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose an image"
+               data-tip="Supported: jpg · png · gif (animated!) · webp · bmp · avif&#10;Transparency is kept when «Preserve transparency» is on.">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-4.5-4.5L7 20"/>
+            </svg>
+            <div class="d-main">Drop an image, click to browse, or paste</div>
+            <div class="d-sub">animated GIFs welcome — every frame gets carved</div>
+            <div class="d-name" id="fileName"></div>
+            <button class="sample-link" id="sampleBtn" type="button">or load a sample image</button>
+            <button class="sample-link" id="sampleTransBtn" type="button">or load a transparent sample</button>
+          </div>
+          <input type="file" id="fileInput" hidden
+                 accept=".jpg,.jpeg,.png,.gif,.bmp,.tiff,.tif,.jfif,.webp,.avif,image/*">
+        </div>
+
+        <hr class="sep">
+
+        <div class="field">
+          <label for="minScaleNum" data-tip="The image will be processed from full size down to this scale.
+0 = shrink to nothing (classic melt)">Min scale <span style="color:var(--faint)">·</span> <span id="minScaleVal" style="font-family:var(--mono);color:var(--txt)">0.00</span></label>
+          <input type="range" id="minScaleRange" min="0" max="100" value="0" step="1">
+        </div>
+
+        <div class="row2">
+          <div class="field">
+            <label for="frames" data-tip="Number of frames to generate.
+(For animated GIF input this is overridden by the GIF's own frame count)">Frames</label>
+            <div class="inwrap"><input type="number" id="frames" value="40" min="1" max="240" step="1"></div>
+          </div>
+          <div class="field">
+            <span class="flabel" data-tip="How the carve amount is distributed across frames">Method</span>
+            <div class="seg" role="radiogroup" aria-label="Method">
+              <label><input type="radio" name="method" value="1"><span data-tip="Seam carving scales the image linearly.">Linear</span></label>
+              <label><input type="radio" name="method" value="2" checked><span data-tip="Sine schedule: small effect at first,
+larger toward the end.">Sine</span></label>
+            </div>
+          </div>
+        </div>
+
+        <div class="switchrow">
+          <span class="flabel" data-tip="Each frame uses the previous frame's output as its input,
+so artifacts compound. Disables multithreading.">Recursive mode</span>
+          <label class="sw"><input type="checkbox" id="recursive"><i></i></label>
+        </div>
+
+        <hr class="sep">
+
+        <div class="field">
+          <span class="flabel" data-tip="Resize the output image after carving">Resize output</span>
+          <div class="seg" role="radiogroup" aria-label="Resize output">
+            <label><input type="radio" name="shape" value="none" checked><span data-tip="Maintain input image resolution">No</span></label>
+            <label><input type="radio" name="shape" value="scale"><span data-tip="Scale the output by a value.
+Single float, or two floats 'w,h'.">Scale</span></label>
+            <label><input type="radio" name="shape" value="res"><span data-tip="Stretch the output to a specific resolution.
+Two integers 'w,h'.">Resolution</span></label>
+          </div>
+        </div>
+        <div class="field" id="rowScale" style="display:none">
+          <label for="scaleTxt" data-tip="Single float ('1.5') scales both axes,
+or two floats ('0.5,0.8') scale width &amp; height separately.">Scale factor(s)</label>
+          <input type="text" id="scaleTxt" placeholder="1.0 or 0.5,0.8" spellcheck="false">
+        </div>
+        <div class="field" id="rowRes" style="display:none">
+          <label for="resTxt" data-tip="Target size as two integers 'w,h' — e.g. '512,512' for a square meme.">Resolution (w,h)</label>
+          <div class="inwrap"><input type="text" id="resTxt" placeholder="512,854" spellcheck="false"><span class="suffix">w,h</span></div>
+        </div>
+
+        <div class="switchrow">
+          <span class="flabel" data-tip="Keep transparent pixels instead of flattening them to black.
+Transparent areas get carved away first.
+Note: GIF output supports binary transparency only —
+WebP and PNG downloads keep smooth alpha.">Preserve transparency</span>
+          <label class="sw"><input type="checkbox" id="trans"><i></i></label>
+        </div>
+
+        <div class="switchrow">
+          <span class="flabel" data-tip="Create a seamless loop by appending frames in reverse order">Loop (boomerang)</span>
+          <label class="sw"><input type="checkbox" id="loop" checked><i></i></label>
+        </div>
+
+        <div class="row2">
+          <div class="field">
+            <label for="interval" data-tip="Delay between frames in milliseconds.
+0 = use the source GIF's own frame delay.">GIF interval</label>
+            <div class="inwrap"><input type="number" id="interval" value="50" min="0" max="10000" step="10"><span class="suffix">ms</span></div>
+          </div>
+          <div class="field">
+            <label for="workSize" data-tip="Downscale the source before carving.
+Native keeps every pixel but is very slow on large images.">Working size</label>
+            <select id="workSize">
+              <option value="0">Native</option>
+              <option value="1024">≤ 1024 px</option>
+              <option value="768">≤ 768 px</option>
+              <option value="640" selected>≤ 640 px</option>
+              <option value="480">≤ 480 px</option>
+            </select>
+          </div>
+        </div>
+
+        <hr class="sep">
+
+        <div class="carve-row" id="carveRow">
+          <button class="btn btn-primary" id="carveBtn" disabled>
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L4.5 13.5H11L9.5 22 19 9.5h-6.5L13 2z"/></svg>
+            Carve!
+          </button>
+          <button class="btn btn-danger" id="cancelBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            Cancel
+          </button>
+        </div>
+        <div id="status" role="status">load an image to begin</div>
+      </div>
+    </section>
+
+    <!-- ===================== PREVIEWS ===================== -->
+    <div class="col">
+      <section class="card" aria-label="Input preview">
+        <div class="card-head">
+          <span class="card-title">Input</span>
+          <span class="chip" id="inMeta"></span>
+        </div>
+        <div class="card-body">
+          <div class="stage" id="inStage">
+            <canvas id="inCanvas" width="0" height="0" hidden></canvas>
+            <div class="empty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="9" cy="9" r="1.6"/></svg>
+              <span>your image will appear here</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-label="Output preview">
+        <div class="card-head">
+          <span class="card-title">Output</span>
+          <span class="chip" id="outMeta"></span>
+        </div>
+        <div class="card-body">
+          <div class="stage" id="outStage" title="click to pause / resume">
+            <canvas id="outCanvas" width="0" height="0" hidden></canvas>
+            <div class="empty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2L4.5 13.5H11L9.5 22 19 9.5h-6.5L13 2z" stroke-linejoin="round"/></svg>
+              <span>carved result lands here</span>
+            </div>
+            <div class="progress" id="prog">
+              <div class="ptext"><span id="pLabel">carving…</span><span id="pPct">0%</span></div>
+              <div class="bar"><i id="pBar"></i></div>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="btn btn-primary" id="dlGif" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+              Download GIF
+            </button>
+            <button class="btn btn-ghost" id="dlWebp" disabled data-tip="Animated WebP — smooth alpha, small files.
+Encoded by the browser itself.">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+              WebP
+            </button>
+            <button class="btn btn-ghost" id="dlPng" disabled data-tip="Animated PNG (APNG) — smooth alpha, lossless.">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+              PNG
+            </button>
+            <button class="btn btn-ghost" id="dlZip" disabled data-tip="Every generated frame as an individual PNG, zipped.">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+              Frames (.zip)
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-label="Size-limited GIF">
+        <div class="card-head">
+          <span class="card-title">Size-limited GIF</span>
+          <span class="chip" id="optMeta"></span>
+        </div>
+        <div class="card-body">
+          <div class="field">
+            <span class="flabel" data-tip="Keep the downloaded GIF under this size.
+The encoder walks down the allowed reductions until
+the file fits — or saves the closest result.
+Applies to the GIF download only.">Size limit</span>
+            <div class="inwrap"><input type="number" id="maxSize" value="0" min="0" step="500" placeholder="off"><span class="suffix">KB</span></div>
+            <div class="perm-grid">
+              <label class="check" data-tip="Allow dropping from 256 down to 8
+palette colors."><input type="checkbox" id="permPalette" checked> Palette reduction</label>
+              <label class="check" data-tip="Floyd–Steinberg dithering on low-color
+steps, so they don't look banded.
+Costs a few % of file size."><input type="checkbox" id="permDither" checked> Dithering</label>
+              <label class="check" data-tip="Allow keeping only every 2nd frame."><input type="checkbox" id="permStep2" checked> Drop every 2nd frame</label>
+              <label class="check" data-tip="Allow keeping only every 3rd frame."><input type="checkbox" id="permStep3" checked> Drop every 3rd frame</label>
+              <label class="check" data-tip="Allow keeping only every 4th frame."><input type="checkbox" id="permStep4" checked> Drop every 4th frame</label>
+              <label class="check" data-tip="When frames are dropped, merge their delays
+into the surviving frame so the total animation
+length stays the same. Unchecked: the animation
+plays faster instead."><input type="checkbox" id="permDuration" checked> Merge dropped duration</label>
+              <label class="check" data-tip="Allow shrinking the output resolution
+(75%, then 50%) — absolute last resort."><input type="checkbox" id="permRes" checked> Resolution reduction</label>
+            </div>
+          </div>
+          <div class="stage" id="optStage" title="click to pause / resume">
+            <canvas id="optCanvas" width="0" height="0" hidden></canvas>
+            <div class="empty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+              <span>set a size limit to preview the optimized gif</span>
+            </div>
+            <div class="progress" id="optProg">
+              <div class="ptext"><span id="optLabel">fitting…</span><span id="optPct"></span></div>
+              <div class="bar"><i id="optBar"></i></div>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="btn btn-primary" id="dlOpt" disabled data-tip="Download the GIF fitted to your size limit.
+Compare it with the full-quality output above.">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+              Download optimized GIF
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <span>Faithful port of <code class="k">main.py</code> (Tkinter) — seam carving, GIF codec &amp; ZIP writer reimplemented from scratch in vanilla JS.</span>
+    <span class="f-right">
+      <span data-tip="Homage to randomize_icon(): the original randomized its window icon
+every 16 ms with pure noise. Now your tab does it.">chaos favicon</span>
+      <label class="sw"><input type="checkbox" id="chaosFav" checked><i></i></label>
+    </span>
+  </footer>
+</div>
+
+<!-- ============================================================
+     Engine (seam carving + GIF + ZIP). Kept as inert text so the
+     same source can be eval'd on the main thread AND spun into a
+     Blob WebWorker without duplication.
+     ============================================================ -->
+<script id="mc-engine" type="text/plain">
+/* ============================================================
+ * Meme Carver engine — seam carving + GIF decode/encode + ZIP
+ * Runs identically on the main thread or inside a Web Worker.
+ * No dependencies. ES2020.
+ * ============================================================ */
+'use strict';
+
+/* ---------------- helpers ---------------- */
+
+function mcClamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+
+/** RGBA -> RGB, transparent pixels flattened to black.
+ *  Mirrors main.py black_alpha_and_remove_alpha(). */
+function flattenRGBA(data, w, h) {
+  const rgb = new Uint8Array(w * h * 3);
+  for (let i = 0, j = 0; i < w * h * 4; i += 4, j += 3) {
+    if (data[i + 3] === 0) { rgb[j] = 0; rgb[j + 1] = 0; rgb[j + 2] = 0; }
+    else { rgb[j] = data[i]; rgb[j + 1] = data[i + 1]; rgb[j + 2] = data[i + 2]; }
+  }
+  return rgb;
+}
+
+/* ---------------- seam carving ---------------- */
+
+/** Dual-gradient energy map over an RGB(A) buffer.
+ *  With bpp=4 the alpha gradient is included, so transparent interiors get
+ *  zero energy (seams eat them first) while alpha edges are protected. */
+function energyMap(rgb, w, h, bpp) {
+  bpp = bpp || 3;
+  const E = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const yU = (y === 0 ? 0 : y - 1) * w;
+    const yD = (y === h - 1 ? h - 1 : y + 1) * w;
+    const yr = y * w;
+    for (let x = 0; x < w; x++) {
+      const a = (yr + (x === 0 ? 0 : x - 1)) * bpp;
+      const b = (yr + (x === w - 1 ? w - 1 : x + 1)) * bpp;
+      const c = (yU + x) * bpp, d = (yD + x) * bpp;
+      let e = 0;
+      for (let ch = 0; ch < bpp; ch++) {
+        e += Math.abs(rgb[a + ch] - rgb[b + ch]) + Math.abs(rgb[c + ch] - rgb[d + ch]);
+      }
+      E[yr + x] = e;
+    }
+  }
+  return E;
+}
+
+/** Lowest-energy vertical seam (one column index per row). */
+function findVerticalSeam(E, w, h) {
+  const M = new Float64Array(w * h);
+  const from = new Int32Array(w * h);
+  M.set(E.subarray(0, w));
+  for (let y = 1; y < h; y++) {
+    const row = y * w, prow = row - w;
+    for (let x = 0; x < w; x++) {
+      let best = M[prow + x], bx = x;
+      if (x > 0 && M[prow + x - 1] < best) { best = M[prow + x - 1]; bx = x - 1; }
+      if (x < w - 1 && M[prow + x + 1] < best) { best = M[prow + x + 1]; bx = x + 1; }
+      M[row + x] = E[row + x] + best;
+      from[row + x] = bx;
+    }
+  }
+  const seam = new Int32Array(h);
+  let bx = 0;
+  const last = (h - 1) * w;
+  for (let x = 1; x < w; x++) if (M[last + x] < M[last + bx]) bx = x;
+  for (let y = h - 1; y >= 0; y--) { seam[y] = bx; bx = from[y * w + bx]; }
+  return seam;
+}
+
+/** Remove one vertical seam from an RGB(A) buffer (width shrinks by 1). */
+function removeVerticalSeam(rgb, w, h, seam, bpp) {
+  bpp = bpp || 3;
+  const w2 = w - 1;
+  const out = new Uint8Array(w2 * h * bpp);
+  for (let y = 0; y < h; y++) {
+    const sx = seam[y];
+    const ro = y * w * bpp, ro2 = y * w2 * bpp;
+    out.set(rgb.subarray(ro, ro + sx * bpp), ro2);
+    out.set(rgb.subarray(ro + (sx + 1) * bpp, ro + w * bpp), ro2 + sx * bpp);
+  }
+  return out;
+}
+
+function transposeRGB(rgb, w, h, bpp) {
+  bpp = bpp || 3;
+  const out = new Uint8Array(rgb.length);
+  for (let y = 0; y < h; y++) {
+    const ro = y * w;
+    for (let x = 0; x < w; x++) {
+      const si = (ro + x) * bpp, di = (x * h + y) * bpp;
+      for (let ch = 0; ch < bpp; ch++) out[di + ch] = rgb[si + ch];
+    }
+  }
+  return out;
+}
+
+/**
+ * Carve an image down to (tw, th) by removing low-energy seams.
+ * Vertical seams first (width), then horizontal seams (height).
+ * onProgress(done, total) fires after every seam. bpp is 3 (RGB) or 4 (RGBA).
+ */
+function carveTo(srcRGB, w, h, tw, th, onProgress, bpp) {
+  bpp = bpp || 3;
+  let img = srcRGB, cw = w, ch = h;
+  const dw = Math.max(0, w - tw), dh = Math.max(0, h - th);
+  const total = dw + dh || 1;
+  let done = 0;
+  let lastReport = 0;
+
+  function report(force) {
+    if (!onProgress) return;
+    if (force || done - lastReport >= 8 || done === total) {
+      lastReport = done;
+      onProgress(done, total);
+    }
+  }
+
+  for (let i = 0; i < dw; i++) {
+    const E = energyMap(img, cw, ch, bpp);
+    const seam = findVerticalSeam(E, cw, ch);
+    img = removeVerticalSeam(img, cw, ch, seam, bpp);
+    cw--; done++;
+    report(false);
+  }
+  if (dh > 0) {
+    let t = transposeRGB(img, cw, ch, bpp); // now width=ch, height=cw
+    for (let i = 0; i < dh; i++) {
+      const E = energyMap(t, ch, cw, bpp);
+      const seam = findVerticalSeam(E, ch, cw);
+      t = removeVerticalSeam(t, ch, cw, seam, bpp);
+      ch--; done++;
+      report(false);
+    }
+    img = transposeRGB(t, ch, cw, bpp); // back to (cw, ch)
+  }
+  report(true);
+  return { rgb: img, width: cw, height: ch };
+}
+
+/* ---------------- scale schedules (mirror main.py) ----------------
+ * linear: np.arange(1, minScale, -(1-minScale)/numFrames)
+ * sine:   minScale + (1-minScale)*cos(i * pi/2 / numFrames)
+ * ------------------------------------------------------------------ */
+function buildScales(method, minScale, numFrames) {
+  const scales = [];
+  if (method === 1) {
+    const step = (1 - minScale) / numFrames;
+    for (let i = 0; i < numFrames; i++) scales.push(1 - i * step);
+  } else {
+    for (let i = 0; i < numFrames; i++) {
+      const x = (Math.PI / 2) * (i / numFrames);
+      scales.push(minScale + (1 - minScale) * Math.cos(x));
+    }
+  }
+  // clamp to [minScale, 1]
+  for (let i = 0; i < scales.length; i++) {
+    scales[i] = mcClamp(scales[i], Math.min(minScale, 1), 1);
+  }
+  return scales;
+}
+
+/* ---------------- GIF decoder ---------------- */
+
+/**
+ * Decode a GIF into frames composited onto a full-size canvas.
+ * Returns { width, height, frames: [{rgb, delayMs}], avgDelayMs }
+ */
+function decodeGIF(buf) {
+  const B = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  const dv = new DataView(B.buffer, B.byteOffset, B.byteLength);
+  let p = 0;
+
+  const sig = String.fromCharCode(B[0], B[1], B[2], B[3], B[4], B[5]);
+  if (!/^GIF8[79]a$/.test(sig)) throw new Error('Not a GIF file');
+  p = 6;
+  const W = dv.getUint16(p, true); p += 2;
+  const H = dv.getUint16(p, true); p += 2;
+  const packed = B[p]; p += 3; // packed + bg color index + pixel aspect ratio
+
+  let gct = null;
+  if (packed & 0x80) {
+    const n = 2 << (packed & 7);
+    gct = B.slice(p, p + n * 3);
+    p += n * 3;
+  }
+
+  const frames = [];
+  let delays = [];
+  let gce = null; // { disposal, delayCs, transparentIdx }
+
+  // full-size compositing canvas (RGBA)
+  let canvas = new Uint8ClampedArray(W * H * 4);
+
+  function readSubBlocks() {
+    let chunks = [];
+    while (true) {
+      const size = B[p++];
+      if (size === 0) break;
+      chunks.push(B.slice(p, p + size));
+      p += size;
+    }
+    let len = 0;
+    for (const c of chunks) len += c.length;
+    const all = new Uint8Array(len);
+    let o = 0;
+    for (const c of chunks) { all.set(c, o); o += c.length; }
+    return all;
+  }
+
+  function composeFrame(fd) {
+    const { left, top, fw, fh, indices, palette, transparentIdx } = fd;
+    const prev = canvas.slice();
+    for (let y = 0; y < fh; y++) {
+      const cy = top + y;
+      if (cy < 0 || cy >= H) continue;
+      for (let x = 0; x < fw; x++) {
+        const cx = left + x;
+        if (cx < 0 || cx >= W) continue;
+        const idx = indices[y * fw + x];
+        const po = (cy * W + cx) * 4;
+        if (transparentIdx >= 0 && idx === transparentIdx) continue; // keep existing
+        canvas[po] = palette[idx * 3];
+        canvas[po + 1] = palette[idx * 3 + 1];
+        canvas[po + 2] = palette[idx * 3 + 2];
+        canvas[po + 3] = 255;
+      }
+    }
+    return prev;
+  }
+
+  function applyDisposal(fd, prev) {
+    const d = gce ? gce.disposal : 0;
+    if (d === 2) {
+      // restore background: clear frame rect to fully transparent
+      for (let y = 0; y < fd.fh; y++) {
+        const cy = fd.top + y;
+        if (cy < 0 || cy >= H) continue;
+        for (let x = 0; x < fd.fw; x++) {
+          const cx = fd.left + x;
+          if (cx < 0 || cx >= W) continue;
+          const po = (cy * W + cx) * 4;
+          canvas[po] = 0; canvas[po + 1] = 0; canvas[po + 2] = 0; canvas[po + 3] = 0;
+        }
+      }
+    } else if (d === 3) {
+      canvas.set(prev);
+    }
+    // disposal 0/1: leave as-is
+  }
+
+  while (p < B.length) {
+    const block = B[p++];
+    if (block === 0x3B) break; // trailer
+
+    if (block === 0x21) { // extension
+      const label = B[p++];
+      if (label === 0xF9 && B[p] === 4) {
+        p++; // block size
+        const flags = B[p];
+        const delayCs = dv.getUint16(p + 1, true);
+        const tIdx = B[p + 3];
+        gce = { disposal: (flags >> 2) & 7, delayCs, transparentIdx: (flags & 1) ? tIdx : -1 };
+        p += 4;
+        p++; // terminator
+      } else {
+        readSubBlocks(); // skip application/comment/plain-text extensions
+      }
+      continue;
+    }
+
+    if (block === 0x2C) { // image descriptor
+      const left = dv.getUint16(p, true); p += 2;
+      const top = dv.getUint16(p, true); p += 2;
+      const fw = dv.getUint16(p, true); p += 2;
+      const fh = dv.getUint16(p, true); p += 2;
+      const fPacked = B[p]; p += 1;
+      let palette = gct;
+      if (fPacked & 0x80) {
+        const n = 2 << (fPacked & 7);
+        palette = B.slice(p, p + n * 3);
+        p += n * 3;
+      }
+      if (!palette) throw new Error('GIF frame without any color table');
+      const lzwMinSize = B[p++]; // must be >= 2
+      const dataBytes = readSubBlocks();
+      const indices = lzwDecode(lzwMinSize, dataBytes, fw * fh);
+
+      // deinterlace
+      if (fPacked & 0x40) {
+        const rows = new Uint8Array(fw * fh);
+        const passes = [[0, 8], [4, 8], [2, 4], [1, 2]];
+        let src = 0;
+        for (const [start, step] of passes) {
+          for (let y = start; y < fh; y += step) {
+            rows.set(indices.subarray(src, src + fw), y * fw);
+            src += fw;
+          }
+        }
+        indices.set(rows);
+      }
+
+      const prev = composeFrame({ left, top, fw, fh, indices, palette, transparentIdx: gce ? gce.transparentIdx : -1 });
+      const delayMs = gce && gce.delayCs > 0 ? gce.delayCs * 10 : 100;
+      frames.push({ rgba: canvas.slice(), delayMs });
+      delays.push(delayMs);
+      applyDisposal({ left, top, fw, fh }, prev);
+      continue;
+    }
+
+    throw new Error('Unknown GIF block 0x' + block.toString(16));
+  }
+
+  const outFrames = frames.map(f => ({ rgb: new Uint8Array(f.rgba), rgba: true, delayMs: f.delayMs }));
+  const avgDelayMs = delays.length ? Math.round(delays.reduce((a, b) => a + b, 0) / delays.length) : 100;
+  return { width: W, height: H, frames: outFrames, avgDelayMs };
+}
+
+/** Minimal GIF LZW decoder. */
+function lzwDecode(minCodeSize, bytes, expectedPixels) {
+  const CLEAR = 1 << minCodeSize;
+  const EOI = CLEAR + 1;
+  const prefix = new Int32Array(4096);
+  const suffix = new Uint8Array(4096);
+  const stack = new Uint8Array(4096 + 1);
+  const out = new Uint8Array(expectedPixels);
+  let op = 0;
+
+  let codeSize = minCodeSize + 1;
+  let next = EOI + 1;
+  let bitBuf = 0, bitCnt = 0, bp = 0;
+  let prevCode = -1;
+
+  function readCode() {
+    while (bitCnt < codeSize) {
+      if (bp >= bytes.length) return -1;
+      bitBuf |= bytes[bp++] << bitCnt;
+      bitCnt += 8;
+    }
+    const code = bitBuf & ((1 << codeSize) - 1);
+    bitBuf >>= codeSize;
+    bitCnt -= codeSize;
+    return code;
+  }
+
+  function addEntry(prefixCode, firstByte) {
+    if (next >= 4096) return; // table full; encoder will send CLEAR
+    prefix[next] = prefixCode;
+    suffix[next] = firstByte;
+    next++;
+    if (next === (1 << codeSize) && codeSize < 12) codeSize++;
+  }
+
+  function emitString(code) {
+    // walk chain to roots, pushing suffixes in reverse
+    let sp = stack.length;
+    while (code >= CLEAR + 2) { stack[--sp] = suffix[code]; code = prefix[code]; }
+    stack[--sp] = code;
+    const first = code;
+    const len = stack.length - sp;
+    if (op + len <= expectedPixels) out.set(stack.subarray(sp), op);
+    op += len;
+    return first;
+  }
+
+  function firstByteOf(code) {
+    while (code >= CLEAR + 2) code = prefix[code];
+    return code;
+  }
+
+  while (true) {
+    const code = readCode();
+    if (code === -1 || code === EOI) break;
+    if (code === CLEAR) {
+      codeSize = minCodeSize + 1;
+      next = EOI + 1;
+      prevCode = -1;
+      continue;
+    }
+    let firstByte;
+    if (code < next) {
+      firstByte = emitString(code);
+      if (prevCode !== -1) addEntry(prevCode, firstByte);
+    } else if (code === next && prevCode !== -1) {
+      // KwKwK: entry = prevString + first(prevString).
+      // Peek the first byte WITHOUT writing prevString to output.
+      const fb = firstByteOf(prevCode);
+      addEntry(prevCode, fb); // creates exactly the missing entry == code
+      firstByte = emitString(code);
+    } else {
+      throw new Error('Corrupt LZW stream');
+    }
+    prevCode = code;
+  }
+  return out;
+}
+
+/* ---------------- GIF encoder ---------------- */
+
+/** Median-cut color quantization. Returns {palette: Uint8Array(3*n), indices}
+ *  bpp=4 enables binary transparency: palette slot 0 is reserved for it and
+ *  pixels with alpha<128 map to index 0. */
+function quantizeFrame(rgb, w, h, maxColors, bpp, dither) {
+  const npix = w * h;
+  bpp = bpp || 3;
+  maxColors = maxColors || 256;
+  const hasAlpha = bpp === 4;
+  if (hasAlpha) maxColors = Math.max(2, maxColors - 1); // slot 0 = transparency
+  // sample opaque pixels
+  const stride = Math.max(1, Math.floor(npix / 60000));
+  const samples = [];
+  for (let i = 0; i < npix; i += stride) {
+    if (hasAlpha && rgb[i * bpp + 3] < 128) continue;
+    samples.push((rgb[i * bpp] << 16) | (rgb[i * bpp + 1] << 8) | rgb[i * bpp + 2]);
+  }
+  if (!samples.length) samples.push(0);
+  // boxes of sample indexes
+  let boxes = [{ idx: samples.map((_, i) => i), lo: null }];
+  boxes[0].lo = [0, 0, 0]; boxes[0].hi = [255, 255, 255];
+
+  function boxRange(box) {
+    const lo = [255, 255, 255], hi = [0, 0, 0];
+    for (const si of box.idx) {
+      const s = samples[si];
+      const r = (s >> 16) & 255, g = (s >> 8) & 255, b = s & 255;
+      if (r < lo[0]) lo[0] = r; if (r > hi[0]) hi[0] = r;
+      if (g < lo[1]) lo[1] = g; if (g > hi[1]) hi[1] = g;
+      if (b < lo[2]) lo[2] = b; if (b > hi[2]) hi[2] = b;
+    }
+    box.lo = lo; box.hi = hi;
+    const dr = hi[0] - lo[0], dg = hi[1] - lo[1], db = hi[2] - lo[2];
+    const chan = dr >= dg && dr >= db ? 0 : (dg >= db ? 1 : 2);
+    return { chan, span: Math.max(dr, dg, db) };
+  }
+
+  while (boxes.length < maxColors) {
+    // pick box with largest span that has >1 unique-ish pixel
+    let bi = -1, bs = -1, bc = -1;
+    for (let i = 0; i < boxes.length; i++) {
+      if (boxes[i].idx.length < 2) continue;
+      const r = boxRange(boxes[i]);
+      const score = r.span * Math.log2(boxes[i].idx.length + 1);
+      if (score > bs) { bs = score; bi = i; bc = r.chan; }
+    }
+    if (bi === -1 || bs <= 0) break;
+    const box = boxes[bi];
+    box.idx.sort((a, b) => samples[a] !== samples[b]
+      ? ((samples[a] >> ((2 - bc) * 8)) & 255) - ((samples[b] >> ((2 - bc) * 8)) & 255)
+      : a - b);
+    const mid = box.idx.length >> 1;
+    const b1 = { idx: box.idx.slice(0, mid) }, b2 = { idx: box.idx.slice(mid) };
+    boxes.splice(bi, 1, b1, b2);
+  }
+
+  // build palette (slot 0 reserved for transparency when hasAlpha)
+  const pal = [];
+  if (hasAlpha) pal.push([0, 0, 0]);
+  for (const box of boxes) {
+    if (!box.idx.length) continue;
+    let r = 0, g = 0, b = 0;
+    for (const si of box.idx) {
+      const s = samples[si];
+      r += (s >> 16) & 255; g += (s >> 8) & 255; b += s & 255;
+    }
+    const n = box.idx.length;
+    pal.push([(r / n) | 0, (g / n) | 0, (b / n) | 0]);
+  }
+  if (!pal.length) pal.push([0, 0, 0]);
+
+  // pad to power of two (>=2)
+  let size = 2;
+  while (size < pal.length) size <<= 1;
+  const palette = new Uint8Array(size * 3);
+  for (let i = 0; i < size; i++) {
+    const c = pal[Math.min(i, pal.length - 1)];
+    palette[i * 3] = c[0]; palette[i * 3 + 1] = c[1]; palette[i * 3 + 2] = c[2];
+  }
+
+  // nearest-color lookup lattice (32x32x32) over opaque entries only
+  const lut = new Uint8Array(32768);
+  const palCount = pal.length;
+  const first = hasAlpha ? 1 : 0;
+  for (let ri = 0; ri < 32; ri++) {
+    for (let gi = 0; gi < 32; gi++) {
+      for (let bi = 0; bi < 32; bi++) {
+        const r = (ri << 3) + 4, g = (gi << 3) + 4, b = (bi << 3) + 4;
+        let best = first, bd = Infinity;
+        for (let i = first; i < palCount; i++) {
+          const dr = pal[i][0] - r, dg = pal[i][1] - g, dbl = pal[i][2] - b;
+          const d = dr * dr + dg * dg + dbl * dbl;
+          if (d < bd) { bd = d; best = i; }
+        }
+        lut[(ri << 10) | (gi << 5) | bi] = best;
+      }
+    }
+  }
+
+  const indices = new Uint8Array(npix);
+  if (!dither) {
+    for (let i = 0; i < npix; i++) {
+      if (hasAlpha && rgb[i * bpp + 3] < 128) { indices[i] = 0; continue; }
+      indices[i] = lut[((rgb[i * bpp] >> 3) << 10) | ((rgb[i * bpp + 1] >> 3) << 5) | (rgb[i * bpp + 2] >> 3)];
+    }
+  } else {
+    // Floyd–Steinberg error diffusion toward the palette (transparent
+    // pixels pass through as index 0 without diffusing error)
+    const cur = new Float32Array((w + 2) * 3);
+    const next = new Float32Array((w + 2) * 3);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const p = y * w + x, base = p * bpp;
+        if (hasAlpha && rgb[base + 3] < 128) { indices[p] = 0; continue; }
+        const e = (x + 1) * 3;
+        let r = rgb[base] + cur[e];
+        let g = rgb[base + 1] + cur[e + 1];
+        let b = rgb[base + 2] + cur[e + 2];
+        r = r < 0 ? 0 : r > 255 ? 255 : r;
+        g = g < 0 ? 0 : g > 255 ? 255 : g;
+        b = b < 0 ? 0 : b > 255 ? 255 : b;
+        const i = lut[((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3)];
+        indices[p] = i;
+        const er = r - palette[i * 3], eg = g - palette[i * 3 + 1], eb = b - palette[i * 3 + 2];
+        const eL = x * 3, eR = (x + 2) * 3;
+        cur[eR] += er * 7 / 16; cur[eR + 1] += eg * 7 / 16; cur[eR + 2] += eb * 7 / 16;
+        next[eL] += er * 3 / 16; next[eL + 1] += eg * 3 / 16; next[eL + 2] += eb * 3 / 16;
+        next[e] += er * 5 / 16; next[e + 1] += eg * 5 / 16; next[e + 2] += eb * 5 / 16;
+        next[eR] += er / 16; next[eR + 1] += eg / 16; next[eR + 2] += eb / 16;
+      }
+      cur.set(next); next.fill(0);
+    }
+  }
+  return { palette, indices, palCount };
+}
+
+/** GIF LZW compressor. */
+function lzwEncode(indices, minCodeSize) {
+  const CLEAR = 1 << minCodeSize;
+  const EOI = CLEAR + 1;
+  const dict = new Map();
+  let codeSize = minCodeSize + 1;
+  let next = EOI + 1;
+  const bytes = [];
+  let cur = 0, curBits = 0;
+
+  function emit(code) {
+    cur |= code << curBits;
+    curBits += codeSize;
+    while (curBits >= 8) { bytes.push(cur & 255); cur >>>= 8; curBits -= 8; }
+  }
+
+  emit(CLEAR);
+  let w = -1;
+  for (let i = 0; i < indices.length; i++) {
+    const k = indices[i];
+    if (w < 0) { w = k; continue; }
+    const key = w * 256 + k;
+    const hit = dict.get(key);
+    if (hit !== undefined) {
+      w = hit;
+    } else {
+      emit(w);
+      // The decoder's table lags one entry behind ours when it reads the
+      // NEXT code, so the width bump must take effect one code later than
+      // the naive symmetric rule.
+      if (next === (1 << codeSize) && codeSize < 12) codeSize++;
+      if (next < 4096) {
+        dict.set(key, next++);
+      } else {
+        emit(CLEAR);
+        dict.clear();
+        codeSize = minCodeSize + 1;
+        next = EOI + 1;
+      }
+      w = k;
+    }
+  }
+  if (w >= 0) emit(w);
+  emit(EOI);
+  if (curBits > 0) bytes.push(cur & 255);
+  return bytes;
+}
+
+/**
+ * Encode uniform-size RGB frames to a looping GIF89a.
+ * frames: [{rgb, w, h, delayMs}] ; returns ArrayBuffer
+ */
+function encodeGIFFrames(frames, opts) {
+  opts = opts || {};
+  const maxColors = Math.min(256, Math.max(2, opts.maxColors || 256));
+  const dither = !!opts.dither;
+  if (!frames.length) throw new Error('No frames');
+  const W = frames[0].w, H = frames[0].h;
+  const out = [];
+
+  function pushStr(s) { for (let i = 0; i < s.length; i++) out.push(s.charCodeAt(i)); }
+  function push16(v) { out.push(v & 255, (v >> 8) & 255); }
+
+  pushStr('GIF89a');
+  push16(W); push16(H);
+  out.push(0x70, 0, 0); // no GCT, no sort
+
+  // NETSCAPE2.0 looping extension
+  pushStr('\u0021\u00FF\u000B');
+  pushStr('NETSCAPE2.0');
+  out.push(3, 1);
+  push16(0); // loop forever
+  out.push(0);
+
+  for (const f of frames) {
+    const bpp = f.rgba ? 4 : 3;
+    const q = quantizeFrame(f.rgb, f.w, f.h, maxColors, bpp, dither);
+    const delayCs = Math.max(2, Math.round(f.delayMs / 10));
+
+    // graphic control extension — transparency flag + disposal "leave in
+    // place" for RGBA frames so transparent pixels reveal the previous frame
+    out.push(0x21, 0xF9, 4, f.rgba ? 0x05 : 0x00);
+    push16(delayCs);
+    out.push(0, 0);
+
+    // image descriptor with local color table
+    out.push(0x2C);
+    push16(0); push16(0); push16(f.w); push16(f.h);
+    const entries = q.palette.length / 3;      // power of two, 2..256
+    const lctField = Math.round(Math.log2(entries)) - 1; // stored as n-1, 3 bits
+    out.push(0x80 | (lctField & 7));
+    out.push.apply(out, q.palette);
+
+    out.push(8); // LZW min code size
+    const lzw = lzwEncode(q.indices, 8);
+    for (let i = 0; i < lzw.length; i += 255) {
+      const chunk = lzw.slice(i, i + 255);
+      out.push(chunk.length);
+      out.push.apply(out, chunk);
+    }
+    out.push(0);
+  }
+  out.push(0x3B);
+  return new Uint8Array(out).buffer;
+}
+
+/* ---------------- ZIP builder (store-only) ---------------- */
+
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(bytes) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 255] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+/** files: [{name, data: Uint8Array}] -> Blob parts (store method, no compression) */
+function buildZip(files) {
+  const enc = new TextEncoder();
+  const chunks = [];
+  const central = [];
+  let offset = 0;
+
+  function u16(v) { return [v & 255, (v >> 8) & 255]; }
+  function u32(v) { return [v & 255, (v >> 8) & 255, (v >> 16) & 255, (v >>> 24) & 255]; }
+
+  for (const f of files) {
+    const nameBytes = enc.encode(f.name);
+    const crc = crc32(f.data);
+    const local = [
+      ...u32(0x04034b50), ...u16(20), ...u16(0), ...u16(0), ...u16(0), ...u16(0),
+      ...u32(crc), ...u32(f.data.length), ...u32(f.data.length),
+      ...u16(nameBytes.length), ...u16(0)
+    ];
+    chunks.push(new Uint8Array(local), nameBytes, f.data);
+    central.push({
+      nameBytes, crc, size: f.data.length, offset
+    });
+    offset += local.length + nameBytes.length + f.data.length;
+  }
+
+  const cdStart = offset;
+  let cdSize = 0;
+  for (const c of central) {
+    const rec = [
+      ...u32(0x02014b50), ...u16(20), ...u16(20), ...u16(0), ...u16(0), ...u16(0), ...u16(0),
+      ...u32(c.crc), ...u32(c.size), ...u32(c.size),
+      ...u16(c.nameBytes.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0),
+      ...u32(0), ...u32(c.offset)
+    ];
+    const recBytes = new Uint8Array(rec);
+    chunks.push(recBytes, c.nameBytes);
+    cdSize += recBytes.length + c.nameBytes.length;
+  }
+  chunks.push(new Uint8Array([
+    ...u32(0x06054b50), ...u16(0), ...u16(0),
+    ...u16(central.length), ...u16(central.length),
+    ...u32(cdSize), ...u32(cdStart), ...u16(0)
+  ]));
+  return chunks;
+}
+
+/* ---------------- APNG builder ---------------- */
+
+function concatBytes(parts) {
+  const out = new Uint8Array(parts.reduce((a, c) => a + c.length, 0));
+  let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.length; }
+  return out;
+}
+
+/** Pull the concatenated IDAT payload out of a single-frame PNG. */
+function extractPngIDAT(buf) {
+  const B = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  const dv = new DataView(B.buffer, B.byteOffset, B.byteLength);
+  let p = 8; // PNG signature
+  const idat = [];
+  while (p + 8 <= B.length) {
+    const len = dv.getUint32(p); p += 4;
+    const type = String.fromCharCode(B[p], B[p + 1], B[p + 2], B[p + 3]); p += 4;
+    if (type === 'IDAT') idat.push(B.slice(p, p + len));
+    p += len + 4; // data + CRC
+    if (type === 'IEND') break;
+  }
+  return concatBytes(idat);
+}
+
+function pngChunk(fourcc, data) {
+  const out = new Uint8Array(12 + data.length);
+  const dv = new DataView(out.buffer);
+  dv.setUint32(0, data.length);
+  for (let i = 0; i < 4; i++) out[4 + i] = fourcc.charCodeAt(i);
+  out.set(data, 8);
+  dv.setUint32(8 + data.length, crc32(out.subarray(4, 8 + data.length)));
+  return out;
+}
+
+/**
+ * Build an animated PNG. frames: [{data: Uint8Array — complete zlib IDAT
+ * payload of one full-size RGBA frame, delayMs}]. Returns Blob parts.
+ */
+function buildAPNG(frames, w, h) {
+  const parts = [];
+  parts.push(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
+  const ihdr = new Uint8Array(13);
+  const iv = new DataView(ihdr.buffer);
+  iv.setUint32(0, w); iv.setUint32(4, h);
+  ihdr[8] = 8;  // bit depth
+  ihdr[9] = 6;  // color type RGBA
+  parts.push(pngChunk('IHDR', ihdr));
+  const actl = new Uint8Array(8);
+  const av = new DataView(actl.buffer);
+  av.setUint32(0, frames.length);
+  av.setUint32(4, 0); // repeat forever
+  parts.push(pngChunk('acTL', actl));
+  let seq = 0;
+  frames.forEach((f, i) => {
+    const fctl = new Uint8Array(26);
+    const fv = new DataView(fctl.buffer);
+    fv.setUint32(0, seq++);
+    fv.setUint32(4, w); fv.setUint32(8, h);
+    fv.setUint32(12, 0); fv.setUint32(16, 0); // x, y offset
+    fv.setUint16(20, Math.min(65000, Math.max(1, Math.round(f.delayMs))));
+    fv.setUint16(22, 1000); // delay in ms
+    fctl[24] = 0; // dispose: none
+    fctl[25] = 0; // blend: source (replace)
+    parts.push(pngChunk('fcTL', fctl));
+    if (i === 0) {
+      parts.push(pngChunk('IDAT', f.data));
+    } else {
+      const fdat = new Uint8Array(4 + f.data.length);
+      new DataView(fdat.buffer).setUint32(0, seq++);
+      fdat.set(f.data, 4);
+      parts.push(pngChunk('fdAT', fdat));
+    }
+  });
+  parts.push(pngChunk('IEND', new Uint8Array(0)));
+  return parts;
+}
+
+/* ---------------- Animated WebP container ---------------- */
+
+/** Parse a RIFF file into [{fourcc, bytes}] (skips the RIFF/WEBP headers). */
+function parseRiffChunks(buf) {
+  const B = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  const dv = new DataView(B.buffer, B.byteOffset, B.byteLength);
+  if (String.fromCharCode(B[0], B[1], B[2], B[3]) !== 'RIFF') throw new Error('not a RIFF file');
+  let p = 12;
+  const chunks = [];
+  while (p + 8 <= B.length) {
+    const fourcc = String.fromCharCode(B[p], B[p + 1], B[p + 2], B[p + 3]);
+    const size = dv.getUint32(p + 4, true);
+    chunks.push({ fourcc, bytes: B.slice(p + 8, p + 8 + size) });
+    p += 8 + size + (size & 1);
+  }
+  return chunks;
+}
+
+/**
+ * Assemble an animated WebP. frames: [{chunks: [{fourcc:'VP8'|'VP8L'|'ALPH',
+ * bytes}] — the bitstream chunks of one complete single-frame WebP,
+ * durationMs}]. Full-canvas frames are written with "do not blend".
+ */
+function buildWebPAnim(frames, w, h) {
+  const parts = [];
+  let total = 4; // 'WEBP'
+  function push(bytes) { parts.push(bytes); total += bytes.length; }
+  function chunk(fourcc, payload) {
+    const head = new Uint8Array(8);
+    for (let i = 0; i < 4; i++) head[i] = fourcc.charCodeAt(i);
+    new DataView(head.buffer).setUint32(4, payload.length, true);
+    push(head); push(payload);
+    if (payload.length & 1) push(new Uint8Array(1));
+  }
+  const u24 = v => new Uint8Array([v & 255, (v >> 8) & 255, (v >>> 16) & 255]);
+
+  const vp8x = new Uint8Array(10);
+  vp8x[0] = 0x02; // animation flag
+  vp8x.set(u24(w - 1), 4);
+  vp8x.set(u24(h - 1), 7);
+  chunk('VP8X', vp8x);
+  chunk('ANIM', new Uint8Array(6)); // bg color + loop count 0 = forever
+
+  for (const f of frames) {
+    const meta = new Uint8Array(16);
+    meta.set(u24(0), 0);            // x
+    meta.set(u24(0), 3);            // y
+    meta.set(u24(w - 1), 6);
+    meta.set(u24(h - 1), 9);
+    meta.set(u24(Math.min(16000000, Math.max(10, Math.round(f.durationMs)))), 12);
+    meta[15] = 0x02;                // do not blend (full replace)
+    const sub = [meta];
+    for (const c of f.chunks) {
+      const head = new Uint8Array(8);
+      for (let i = 0; i < 4; i++) head[i] = c.fourcc.charCodeAt(i);
+      new DataView(head.buffer).setUint32(4, c.bytes.length, true);
+      sub.push(head, c.bytes);
+      if (c.bytes.length & 1) sub.push(new Uint8Array(1));
+    }
+    chunk('ANMF', concatBytes(sub));
+  }
+
+  const head = new Uint8Array(12);
+  head.set([82, 73, 70, 70]); // RIFF
+  new DataView(head.buffer).setUint32(4, total, true);
+  head.set([87, 69, 66, 80], 8); // WEBP
+  return concatBytes([head, ...parts]).buffer;
+}
+
+/* ---------------- worker message protocol ----------------
+ * req: { cmd:'carve', frameId, rgb(ArrayBuffer), w, h,
+ *        targetW, targetH, scale }
+ * res progress: { type:'progress', frameId, done, total }
+ * res done:     { type:'done', frameId, rgb:ArrayBuffer, w, h }
+ * --------------------------------------------------------- */
+if (typeof self !== 'undefined' && typeof self.postMessage === 'function' && typeof importScripts === 'function') {
+  self.onmessage = function (e) {
+    const msg = e.data;
+    try {
+      if (msg.cmd === 'encode') {
+        const frames = msg.frames.map(f => ({ rgb: new Uint8Array(f.rgb), w: f.w, h: f.h, delayMs: f.delayMs, rgba: f.rgba }));
+        const buf = encodeGIFFrames(frames, { maxColors: msg.maxColors, dither: msg.dither });
+        self.postMessage({ type: 'encoded', token: msg.token, gif: buf }, [buf]);
+        return;
+      }
+      const rgb = new Uint8Array(msg.rgb);
+      const bpp = msg.bpp || 3;
+      const tw = Math.max(1, Math.floor(msg.w * msg.scale));
+      const th = Math.max(1, Math.floor(msg.h * msg.scale));
+      const carved = carveTo(rgb, msg.w, msg.h, tw, th, (done, total) => {
+        self.postMessage({ type: 'progress', frameId: msg.frameId, done, total });
+      }, bpp);
+      self.postMessage({ type: 'done', frameId: msg.frameId, rgb: carved.rgb.buffer, w: carved.width, h: carved.height }, [carved.rgb.buffer]);
+    } catch (err) {
+      self.postMessage({ type: 'error', frameId: msg.frameId, message: String(err && err.message || err) });
+    }
+  };
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    flattenRGBA, energyMap, findVerticalSeam, removeVerticalSeam, transposeRGB,
+    carveTo, buildScales, decodeGIF, lzwDecode, quantizeFrame, lzwEncode,
+    encodeGIFFrames, buildZip, crc32, concatBytes, extractPngIDAT,
+    buildAPNG, parseRiffChunks, buildWebPAnim
+  };
+}
+
+</script>
+
+<script>
+'use strict';
+/* ================= boot: engine + worker factory ================= */
+const ENGINE_SRC = document.getElementById('mc-engine').textContent;
+const MC = new Function(ENGINE_SRC + '\nreturn {flattenRGBA,carveTo,buildScales,decodeGIF,encodeGIFFrames,buildZip,concatBytes,extractPngIDAT,buildAPNG,parseRiffChunks,buildWebPAnim};')();
+let _workerURL = null;
+function makeWorker(){
+  if (!_workerURL) _workerURL = URL.createObjectURL(new Blob([ENGINE_SRC], {type:'application/javascript'}));
+  try { return new Worker(_workerURL); } catch(e){ return null; }
+}
+
+/* ================= dom helpers ================= */
+const $ = id => document.getElementById(id);
+const els = {
+  drop:$('drop'), fileInput:$('fileInput'), sampleBtn:$('sampleBtn'), sampleTransBtn:$('sampleTransBtn'), fileName:$('fileName'),
+  minScaleRange:$('minScaleRange'), minScaleVal:$('minScaleVal'),
+  frames:$('frames'), recursive:$('recursive'), trans:$('trans'),
+  rowScale:$('rowScale'), scaleTxt:$('scaleTxt'), rowRes:$('rowRes'), resTxt:$('resTxt'),
+  loop:$('loop'), interval:$('interval'), maxSize:$('maxSize'), workSize:$('workSize'),
+  permPalette:$('permPalette'), permDither:$('permDither'),
+  permStep2:$('permStep2'), permStep3:$('permStep3'), permStep4:$('permStep4'),
+  permDuration:$('permDuration'), permRes:$('permRes'),
+  carveBtn:$('carveBtn'), cancelBtn:$('cancelBtn'), status:$('status'),
+  inStage:$('inStage'), inCanvas:$('inCanvas'), inMeta:$('inMeta'),
+  outStage:$('outStage'), outCanvas:$('outCanvas'), outMeta:$('outMeta'),
+  prog:$('prog'), pBar:$('pBar'), pPct:$('pPct'), pLabel:$('pLabel'),
+  dlGif:$('dlGif'), dlWebp:$('dlWebp'), dlPng:$('dlPng'), dlZip:$('dlZip'), chaos:$('chaosFav'), favicon:$('favicon'),
+  carveRow:$('carveRow'),
+  optStage:$('optStage'), optCanvas:$('optCanvas'), optMeta:$('optMeta'),
+  optProg:$('optProg'), optBar:$('optBar'), optPct:$('optPct'), optLabel:$('optLabel'),
+  dlOpt:$('dlOpt'),
+};
+
+/* ================= state ================= */
+const state = {
+  src:null,           // {frames:[{rgb,w,h,delayMs,rgba}], isGif, avgDelay}
+  file:null,          // last loaded File — re-decoded when the alpha toggle flips
+  baseName:'image',
+  running:false,
+  results:null,       // [{rgb,w,h}] at target resolution (raw, pre-loop)
+  playList:null,      // ordered frames for playback
+  targetW:0, targetH:0,
+  lastSettings:null,
+  optimized:null,     // {gif:ArrayBuffer, bytes, desc} — fitted to the size limit
+  fullGif:null,       // {gif:ArrayBuffer, bytes} — full-quality encode (cached)
+  fitSeq:0,           // invalidates in-flight fits
+  outMetaBase:'',
+};
+let controller = null; // active carve cancellation handle
+
+/* ================= tiny frame player ================= */
+function putFrame(ctx, f){
+  const st = f.rgba ? 4 : 3;
+  const img = ctx.createImageData(f.w, f.h);
+  const d = img.data, s = f.rgb;
+  for (let i=0, j=0; j<s.length; i+=4, j+=st){
+    d[i]=s[j]; d[i+1]=s[j+1]; d[i+2]=s[j+2];
+    d[i+3]= f.rgba ? s[j+3] : 255;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+function makePlayer(canvas, stage){
+  let frames=null, i=0, acc=0, last=0, playing=false, raf=0;
+  function show(j){
+    const f = frames[j];
+    if (canvas.width!==f.w || canvas.height!==f.h){ canvas.width=f.w; canvas.height=f.h; }
+    putFrame(canvas.getContext('2d'), f);
+    stage.classList.add('filled');
+    canvas.hidden = false;
+  }
+  function tick(ts){
+    if (!playing) return;
+    acc += ts-last; last=ts;
+    let guard=0;
+    while (acc >= frames[i].delayMs && guard++<8){
+      acc -= frames[i].delayMs;
+      i=(i+1)%frames.length;
+      show(i);
+    }
+    raf=requestAnimationFrame(tick);
+  }
+  return {
+    load(list, autoplay=true){
+      this.stop(); frames=list;
+      if (!list.length) return;
+      i=0; show(0);
+      if (autoplay && list.length>1){ playing=true; acc=0; last=performance.now(); raf=requestAnimationFrame(tick); }
+    },
+    toggle(){ if(!frames||frames.length<2) return;
+      if (playing){ playing=false; cancelAnimationFrame(raf); }
+      else { playing=true; acc=0; last=performance.now(); raf=requestAnimationFrame(tick); } },
+    stop(){ playing=false; cancelAnimationFrame(raf); },
+    get playing(){ return playing; },
+  };
+}
+const inPlayer  = makePlayer(els.inCanvas, els.inStage);
+const outPlayer = makePlayer(els.outCanvas, els.outStage);
+const optPlayer = makePlayer(els.optCanvas, els.optStage);
+els.outStage.addEventListener('click', () => { if (!state.running) outPlayer.toggle(); });
+els.optStage.addEventListener('click', () => { if (!state.runningFit) optPlayer.toggle(); });
+function fmtSize(b){ return b>=1048576 ? (b/1048576).toFixed(2)+' MB' : (b/1024).toFixed(0)+' KB'; }
+
+/* ================= image loading ================= */
+function setStatus(msg, kind){ els.status.textContent=msg; els.status.className = kind||''; }
+
+function loadImageFile(file){
+  if (!file) return;
+  state.file = file;
+  state.baseName = (file.name||'image').replace(/\.[^.]+$/,'')||'image';
+  const isGif = /\.gif$/i.test(file.name) || file.type==='image/gif';
+  setStatus('decoding '+file.name+' …');
+  const fr = new FileReader();
+  fr.onerror = () => setStatus('could not read that file','err');
+  fr.onload = async () => {
+    try{
+      if (isGif){
+        const dec = MC.decodeGIF(fr.result);
+        applySource(dec.frames.map(f=>prepFrame(f.rgb,dec.width,dec.height,f.delayMs)), true, dec.avgDelayMs, file.name);
+      } else {
+        const bmp = await decodeBitmap(fr.result, file.type);
+        const c = document.createElement('canvas');
+        c.width=bmp.width; c.height=bmp.height;
+        c.getContext('2d').drawImage(bmp,0,0);
+        const d = c.getContext('2d').getImageData(0,0,bmp.width,bmp.height);
+        applySource([prepFrame(new Uint8Array(d.data),bmp.width,bmp.height,0)], false, 50, file.name);
+      }
+      setStatus('ready — hit Carve!','');
+    }catch(err){
+      console.error(err);
+      setStatus('decode failed: '+(err&&err.message||err),'err');
+    }
+  };
+  fr.readAsArrayBuffer(file);
+}
+/** rgba=true keeps the 4-byte pixels (transparent RGB zeroed for stable
+ *  energy); rgba=false flattens to black, exactly like the original main.py. */
+function prepFrame(rgba, w, h, delayMs){
+  if (els.trans.checked){
+    for (let i=0;i<rgba.length;i+=4){
+      if (rgba[i+3]===0){ rgba[i]=0; rgba[i+1]=0; rgba[i+2]=0; }
+    }
+    return {rgb:rgba, w, h, delayMs, rgba:true};
+  }
+  return {rgb:MC.flattenRGBA(rgba,w,h), w, h, delayMs, rgba:false};
+}
+function decodeBitmap(buf, mime){
+  return new Promise((res,rej)=>{
+    const blob=new Blob([buf],{type:mime||'image/png'});
+    const url=URL.createObjectURL(blob);
+    const im=new Image();
+    im.onload=()=>{URL.revokeObjectURL(url); res(im);};
+    im.onerror=()=>{URL.revokeObjectURL(url); rej(new Error('browser cannot display this format'));};
+    im.src=url;
+  });
+}
+function applySource(frames,isGif,avgDelay,name){
+  // working-size cap
+  const cap = parseInt(els.workSize.value,10)||0;
+  if (cap>0){
+    const m = Math.max(frames[0].w, frames[0].h);
+    if (m > cap){
+      const k = cap/m, tw=Math.max(1,Math.round(frames[0].w*k)), th=Math.max(1,Math.round(frames[0].h*k));
+      frames = frames.map(f=>({...stretchFrame(f,tw,th), delayMs:f.delayMs}));
+    }
+  }
+  state.src={frames,isGif,avgDelay};
+  els.fileName.textContent=name;
+  els.drop.classList.add('hasfile');
+  els.inMeta.textContent=`${name} · ${frames[0].w}×${frames[0].h}`+
+    (isGif?` · ${frames.length}f · ${Math.round(avgDelay)}ms · ${Math.round(1000/avgDelay)}fps`:'');
+  inPlayer.load(frames,true);
+  invalidateResult();
+  els.carveBtn.disabled=false;
+}
+function invalidateResult(){
+  state.results=null; state.playList=null;
+  outPlayer.stop();
+  els.outCanvas.hidden=true; els.outStage.classList.remove('filled');
+  els.outMeta.textContent=''; state.outMetaBase='';
+  els.dlGif.disabled=true; els.dlWebp.disabled=true; els.dlPng.disabled=true;
+  els.dlZip.disabled=true;
+  clearOptimized();
+}
+
+/* drag & drop + paste */
+els.drop.addEventListener('click', e => { if (e.target!==els.sampleBtn && e.target!==els.sampleTransBtn) els.fileInput.click(); });
+els.drop.addEventListener('keydown', e => { if(e.key==='Enter'||e.key===' '){e.preventDefault(); els.fileInput.click();} });
+els.fileInput.addEventListener('change', ()=> loadImageFile(els.fileInput.files[0]));
+['dragover','dragenter'].forEach(ev=>els.drop.addEventListener(ev,e=>{e.preventDefault();els.drop.classList.add('drag');}));
+['dragleave','dragend'].forEach(ev=>els.drop.addEventListener(ev,()=>els.drop.classList.remove('drag')));
+els.drop.addEventListener('drop', e=>{
+  e.preventDefault(); els.drop.classList.remove('drag');
+  const f=[...(e.dataTransfer.files||[])].find(f=>f.type.startsWith('image/')||/\.(jpe?g|png|gif|bmp|tiff?|jfif|webp|avif)$/i.test(f.name));
+  if(f) loadImageFile(f);
+});
+window.addEventListener('paste', e=>{
+  const f=[...(e.clipboardData?.files||[ ])][0];
+  if(f&&f.type.startsWith('image/')) loadImageFile(f);
+});
+
+/* sample image generator */
+els.sampleBtn.addEventListener('click', e=>{
+  e.stopPropagation();
+  const c=document.createElement('canvas'); c.width=800; c.height=560;
+  const g=c.getContext('2d');
+  const sky=g.createLinearGradient(0,0,0,560);
+  sky.addColorStop(0,'#2b1055'); sky.addColorStop(.55,'#7597de'); sky.addColorStop(1,'#ffb88c');
+  g.fillStyle=sky; g.fillRect(0,0,800,560);
+  g.fillStyle='#ffe259'; g.beginPath(); g.arc(400,300,95,0,Math.PI*2); g.fill();
+  g.fillStyle='#1a0b2e'; g.beginPath(); g.moveTo(0,560); g.lineTo(140,340); g.lineTo(300,520); g.lineTo(430,380); g.lineTo(600,560); g.closePath(); g.fill();
+  g.fillStyle='#12071f'; g.beginPath(); g.moveTo(250,560); g.lineTo(500,330); g.lineTo(800,560); g.closePath(); g.fill();
+  g.font='bold 64px system-ui,sans-serif'; g.textAlign='center';
+  g.lineWidth=10; g.strokeStyle='#000'; g.strokeText('SAMPLE',400,110);
+  g.fillStyle='#fff'; g.fillText('SAMPLE',400,110);
+  g.font='bold 34px system-ui,sans-serif';
+  g.strokeText('carve me into oblivion',400,168); g.fillText('carve me into oblivion',400,168);
+  c.toBlob(b=>loadImageFile(new File([b],'sample.png',{type:'image/png'})));
+});
+
+/* transparent sample — a sticker on a fully transparent background */
+els.sampleTransBtn.addEventListener('click', e=>{
+  e.stopPropagation();
+  const c=document.createElement('canvas'); c.width=800; c.height=560;
+  const g=c.getContext('2d');
+  // rounded-rect sticker with transparent surroundings
+  const r=56, x=90, y=70, w=620, h=420;
+  g.beginPath();
+  g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r);
+  g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath();
+  const grad=g.createLinearGradient(x,y,x+w,y+h);
+  grad.addColorStop(0,'#f472b6'); grad.addColorStop(.5,'#8b5cf6'); grad.addColorStop(1,'#22d3ee');
+  g.fillStyle=grad; g.fill();
+  g.lineWidth=14; g.strokeStyle='#ffffff'; g.stroke();
+  // a transparent hole in the middle (real see-through region)
+  g.globalCompositeOperation='destination-out';
+  g.beginPath(); g.arc(x+w/2, y+h/2+18, 74, 0, Math.PI*2); g.fill();
+  g.globalCompositeOperation='source-over';
+  g.font='bold 72px system-ui,sans-serif'; g.textAlign='center';
+  g.lineWidth=12; g.strokeStyle='#1e1b4b'; g.lineJoin='round';
+  g.strokeText('STICKER',x+w/2,y+128);
+  g.fillStyle='#ffffff'; g.fillText('STICKER',x+w/2,y+128);
+  g.font='bold 30px system-ui,sans-serif';
+  g.strokeText('watch the hole survive',x+w/2,y+h-42);
+  g.fillStyle='#e0e7ff'; g.fillText('watch the hole survive',x+w/2,y+h-42);
+  c.toBlob(b=>loadImageFile(new File([b],'sticker_sample.png',{type:'image/png'})));
+});
+
+/* ================= controls wiring ================= */
+function syncMinScale(pct){
+  pct=Math.min(100,Math.max(0,Math.round(+pct||0)));
+  const v=pct/100;
+  els.minScaleRange.value=pct;
+  els.minScaleRange.style.setProperty('--fill',pct+'%');
+  els.minScaleVal.textContent=v.toFixed(2);
+}
+els.minScaleRange.addEventListener('input',()=>syncMinScale(els.minScaleRange.value));
+syncMinScale(0);
+
+document.querySelectorAll('input[name=shape]').forEach(r=>r.addEventListener('change',()=>{
+  const v=document.querySelector('input[name=shape]:checked').value;
+  els.rowScale.style.display = v==='scale'?'':'none';
+  els.rowRes.style.display   = v==='res'?'':'none';
+}));
+
+/* ================= validation (bug-fixed port of submit()) ================= */
+function validate(){
+  const errs=[];
+  const minScale=parseFloat(els.minScaleRange.value)/100;
+  const nFrames=parseInt(els.frames.value,10);
+  const interval=parseInt(els.interval.value,10);
+
+  if (!(minScale>=0) || minScale>1) errs.push(['Min scale must be between 0 and 1.', els.minScaleRange]);
+  if (!Number.isInteger(nFrames) || nFrames<1 || nFrames>240) errs.push(['Frames must be a positive integer (max 240).', els.frames]);
+  if (!Number.isInteger(interval) || interval<0) errs.push(['GIF interval must be zero or a positive integer.', els.interval]);
+
+  let shape=null, shapeOpts='none';
+  const shapeSel=document.querySelector('input[name=shape]:checked').value;
+  if (shapeSel==='scale'){
+    const txt=els.scaleTxt.value.trim();
+    const parts=txt.split(',');
+    const ok=parts.length===1||parts.length===2;
+    if (!ok || !parts.every(p=>isFinite(+p)&&+p>0)) errs.push(["Shape scale must be one positive float or two separated by a comma.", els.scaleTxt]);
+    else { shapeOpts='scale'; shape=parts.map(Number); }
+  } else if (shapeSel==='res'){
+    const parts=els.resTxt.value.trim().split(',');
+    if (parts.length!==2 || !parts.every(p=>Number.isInteger(+p)&&+p>0)) errs.push(["Shape resolution must be two positive integers 'w,h'.", els.resTxt]);
+    else { shapeOpts='res'; shape=[+parts[0],+parts[1]]; }
+  }
+
+  if (state.src?.isGif && els.recursive.checked) errs.push(["Animated GIF input can't be combined with Recursive mode.", els.recursive]);
+  if (!state.src) errs.unshift(['Load an image first.', els.drop]);
+
+  return {errs, minScale, nFrames, interval, shape, shapeOpts};
+}
+
+/* ================= stretch helper (skimage.transform.resize stand-in) ================= */
+const scratchA=document.createElement('canvas'), scratchB=document.createElement('canvas');
+function stretchFrame(f,tw,th){
+  const st = f.rgba ? 4 : 3;
+  scratchA.width=f.w; scratchA.height=f.h;
+  const actx=scratchA.getContext('2d');
+  const img=actx.createImageData(f.w,f.h);
+  const s=f.rgb;
+  for(let i=0,j=0;j<s.length;i+=4,j+=st){
+    img.data[i]=s[j];img.data[i+1]=s[j+1];img.data[i+2]=s[j+2];
+    img.data[i+3]= f.rgba ? s[j+3] : 255;
+  }
+  actx.putImageData(img,0,0);
+  scratchB.width=tw; scratchB.height=th;
+  const bctx=scratchB.getContext('2d');
+  bctx.imageSmoothingEnabled=true; bctx.imageSmoothingQuality='high';
+  bctx.drawImage(scratchA,0,0,tw,th);
+  const d=bctx.getImageData(0,0,tw,th);
+  if (f.rgba) return {rgb:new Uint8Array(d.data), w:tw, h:th, rgba:true};
+  return {rgb:MC.flattenRGBA(d.data,tw,th), w:tw, h:th, rgba:false};
+}
+
+/* ================= carve orchestration ================= */
+function computeTarget(shapeOpts, shape, baseW, baseH){
+  // fixed port of process_frames() resolution logic (honors both axes!)
+  let W=baseW,H=baseH;
+  if (shapeOpts==='scale'){
+    const sx=shape[0], sy=shape.length===2?shape[1]:shape[0];
+    W=Math.floor(baseW*sx); H=Math.floor(baseH*sy);
+  } else if (shapeOpts==='res'){ W=shape[0]; H=shape[1]; }
+  return [Math.max(1,W), Math.max(1,H)];
+}
+
+async function runCarve(){
+  if (state.running || !state.src) return;
+  const v=validate();
+  if (v.errs.length){
+    setStatus(v.errs[0][0],'err');
+    const el=v.errs[0][1];
+    el.classList?.add('shake'); setTimeout(()=>el.classList?.remove('shake'),500);
+    return;
+  }
+  const {minScale,nFrames,interval,shape,shapeOpts}=v;
+
+  const srcFrames=state.src.frames;
+  const isGif=state.src.isGif;
+  const n=isGif?srcFrames.length:nFrames;         // python overrides count for gifs
+  const scales=MC.buildScales(parseInt(document.querySelector('input[name=method]:checked').value,10),minScale,n);
+  const [TW,TH]=computeTarget(shapeOpts,shape,srcFrames[0].w,srcFrames[0].h);
+  state.targetW=TW; state.targetH=TH;
+  state.lastSettings={minScale,nFrames:n,method:parseInt(document.querySelector('input[name=method]:checked').value,10),recursive:els.recursive.checked,loop:els.loop.checked};
+
+  invalidateResult();
+  state.running=true;
+  els.carveRow.classList.add('running');
+  els.outStage.classList.add('dimmed');
+  els.prog.classList.add('on');
+  els.pLabel.textContent=isGif?`carving ${n} gif frames…`:(els.recursive.checked?'recursively carving…':`carving ${n} frames…`);
+  setProgress(0);
+
+  const t0=performance.now();
+  const totals=scales.map((sc,i)=>{
+    const f=srcFrames[Math.min(i,srcFrames.length-1)];
+    return Math.max(1,(f.w-Math.max(1,Math.floor(f.w*sc)))+(f.h-Math.max(1,Math.floor(f.h*sc))));
+  });
+  const grandTotal=totals.reduce((a,b)=>a+b,0);
+  const doneArr=new Array(n).fill(0);
+  const bump=(fi,done)=>{doneArr[fi]=done;setProgress(doneArr.reduce((a,b)=>a+b,0)/grandTotal);};
+  function setProgress(p){
+    els.pBar.style.width=(p*100).toFixed(1)+'%';
+    els.pPct.textContent=Math.round(p*100)+'%';
+  }
+
+  try{
+    let raw;
+    if (els.recursive.checked && !isGif){
+      raw=await carveRecursive(srcFrames[0],scales,TW,TH,bump);
+    } else {
+      raw=await carveParallel(isGif?srcFrames:[srcFrames[0]],scales,n,TW,TH,totals,bump);
+    }
+    state.results=raw;
+    // loop ordering — faithful to python: f0, f1..fn-1, then fn-2..f1
+    const seq=raw.slice(1);
+    if (els.loop.checked) seq.push(...raw.slice(1,-1).reverse());
+
+    // Per-frame delays: an explicit interval wins (uniform, like main.py);
+    // interval=0 on a GIF keeps every source frame's own timing — including
+    // variable ones; static images default to 50ms.
+    if (interval > 0) raw.forEach(f=>f.delayMs=interval);
+    else if (isGif) raw.forEach((f,i)=>f.delayMs=Math.max(10,(srcFrames[Math.min(i,srcFrames.length-1)]).delayMs));
+    else raw.forEach(f=>f.delayMs=50);
+    state.playList=[raw[0],...seq];
+    outPlayer.load(state.playList,true);
+    const ds=state.playList.map(f=>f.delayMs);
+    const mean=ds.reduce((a,b)=>a+b,0)/ds.length;
+    const uniform=ds.every(d=>d===ds[0]);
+    els.outMeta.textContent=`${TW}×${TH} · ${state.playList.length} frames · `+
+      (uniform?`${(mean/1000).toFixed(2)}s/frame · ${Math.round(1000/mean)} fps`
+              :`variable · ~${Math.round(1000/mean)} fps`);
+    setStatus(`done in ${((performance.now()-t0)/1000).toFixed(1)}s — click the output to pause`, 'ok');
+    els.dlGif.disabled=false;
+    els.dlPng.disabled=false;
+    els.dlWebp.disabled=!webpSupported;
+    els.dlZip.disabled=false;
+    // encode the full-quality gif in the background: its size feeds the chip
+    // and makes the Download GIF button instant
+    state.outMetaBase=els.outMeta.textContent;
+    const myList=state.playList;
+    (async ()=>{
+      try{
+        const w=makeWorker(); if(!w) return;
+        const copies=myList.map(f=>({rgb:f.rgb.slice().buffer,w:f.w,h:f.h,delayMs:f.delayMs,rgba:f.rgba}));
+        const gif=await encodeGifInWorker(w,copies,256,false).catch(()=>null);
+        w.terminate();
+        if(!gif || state.playList!==myList) return;
+        state.fullGif={gif,bytes:gif.byteLength};
+        els.outMeta.textContent=state.outMetaBase+` · ${fmtSize(gif.byteLength)}`;
+      }catch{}
+    })();
+    maybeAutoFit();
+  }catch(err){
+    if (err && err.cancelled){ setStatus('cancelled'); }
+    else { console.error(err); setStatus('carve failed: '+(err&&err.message||err),'err'); }
+  }finally{
+    state.running=false;
+    controller=null;
+    els.carveRow.classList.remove('running');
+    els.outStage.classList.remove('dimmed');
+    els.prog.classList.remove('on');
+  }
+}
+
+/* parallel mode — worker pool over per-frame jobs */
+function carveParallel(sources,scales,n,TW,TH,totals,bump){
+  return new Promise((resolve,reject)=>{
+    const results=new Array(n).fill(null);
+    let settled=false, cancelled=false;
+    const workers=[];
+
+    controller={
+      cancel(){ cancelled=true; workers.forEach(w=>w.terminate()); reject({cancelled:true}); }
+    };
+
+    const jobs=[];
+    for(let i=0;i<n;i++){
+      const src=sources[Math.min(i,sources.length-1)];
+      jobs.push({frameId:i, rgb:src.rgb, w:src.w, h:src.h, scale:scales[i], bpp:src.rgba?4:3, rgba:!!src.rgba});
+    }
+
+    const poolSize=Math.max(1,Math.min(navigator.hardwareConcurrency||4, jobs.length, 12));
+    let nextJob=0, completedJobs=0;
+    const jobRgba=jobs.map(j=>j.rgba);
+    const currentJobRgba = fi => jobRgba[fi];
+
+    function settle(res){
+      if(settled)return; settled=true;
+      workers.forEach(w=>w.terminate());
+      resolve(res);
+    }
+
+    for(let k=0;k<poolSize;k++){
+      const w=makeWorker();
+      if (!w){ workers.forEach(x=>x.terminate()); reject(new Error('Web Workers unavailable in this browser')); return; }
+      workers.push(w);
+      w.onerror=e=>{ if(!cancelled){cancelled=true;workers.forEach(x=>x.terminate());reject(new Error(e.message||'worker crashed'));} };
+      w.onmessage=e=>{
+        const m=e.data;
+        if(m.type==='progress'){ bump(m.frameId,m.done); return; }
+        if(m.type==='done'){
+          const stretched=stretchFrame({rgb:new Uint8Array(m.rgb),w:m.w,h:m.h,rgba:currentJobRgba(m.frameId)},TW,TH);
+          results[m.frameId]={rgb:stretched.rgb,w:stretched.w,h:stretched.h,rgba:stretched.rgba};
+          bump(m.frameId,totals[m.frameId]);
+          completedJobs++;
+          if(completedJobs===jobs.length && !cancelled){ settle(results.slice()); return; }
+          const job=jobs[nextJob++];
+          if(job && !cancelled) w.postMessage(job);
+        }
+        if(m.type==='error'){ if(!cancelled){cancelled=true;workers.forEach(x=>x.terminate());reject(new Error(m.message));} }
+      };
+      const job=jobs[nextJob++];
+      if(job) w.postMessage(job);
+    }
+  });
+}
+
+/* recursive mode — sequential chain, each frame eats the previous output */
+function carveRecursive(firstSrc,scales,TW,TH,bump){
+  return new Promise(async (resolve,reject)=>{
+    let cancelled=false;
+    const w=makeWorker();
+    if (!w){ reject(new Error('Web Workers unavailable')); return; }
+    controller={cancel(){cancelled=true;w.terminate();reject({cancelled:true});}};
+    const out=[];
+    let cur={rgb:firstSrc.rgb,w:firstSrc.w,h:firstSrc.h,rgba:!!firstSrc.rgba};
+
+    function step(i){
+      if(cancelled)return;
+      w.onmessage=e=>{
+        const m=e.data;
+        if(m.type==='progress'){bump(i,m.done);return;}
+        if(m.type==='error'){cancelled=true;w.terminate();reject(new Error(m.message));return;}
+        // m.type === done
+        const stretched=stretchFrame({rgb:new Uint8Array(m.rgb),w:m.w,h:m.h,rgba:cur.rgba},TW,TH);
+        out.push({rgb:stretched.rgb,w:stretched.w,h:stretched.h,rgba:stretched.rgba});
+        cur=stretched;
+        if(i+1<scales.length) step(i+1);
+        else { w.terminate(); resolve(out); }
+      };
+      w.postMessage({frameId:i,rgb:cur.rgb,w:cur.w,h:cur.h,scale:scales[i],bpp:cur.rgba?4:3});
+    }
+    step(0);
+  });
+}
+
+els.carveBtn.addEventListener('click',runCarve);
+els.cancelBtn.addEventListener('click',()=>controller&&controller.cancel());
+window.addEventListener('keydown',e=>{ if(e.key==='Escape'&&state.running) controller&&controller.cancel(); });
+
+/* ================= downloads ================= */
+function buildOutName(ext){
+  const s=state.lastSettings;
+  let name=`${state.baseName}_S${s.minScale}_F${s.nFrames}_M${s.method}_R${state.targetW}x${state.targetH}`;
+  if(s.recursive)name+='_(prev)';
+  if(s.loop)name+='_(loop)';
+  return name+ext;
+}
+function triggerDownload(blob,name){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+/* drop every Nth frame; merge their delays so total duration is preserved,
+   or (option off) keep each survivor's own delay and let it play faster */
+function skipFrames(list, step, preserveDuration){
+  if (step <= 1) return list;
+  const out=[];
+  for (let i=0;i<list.length;i+=step){
+    if (preserveDuration){
+      let delay=0;
+      for (let j=i;j<Math.min(i+step,list.length);j++) delay+=list[j].delayMs;
+      out.push(Object.assign({}, list[i], {delayMs: Math.min(65000, Math.max(20, delay))}));
+    } else {
+      out.push(list[i]);
+    }
+  }
+  return out;
+}
+/* render a frame smaller through the canvas (last-resort size reduction) */
+function downscaleFrame(f, scale){
+  const tw=Math.max(1,Math.round(f.w*scale)), th=Math.max(1,Math.round(f.h*scale));
+  scratchA.width=f.w; scratchA.height=f.h;
+  putFrame(scratchA.getContext('2d'), f);
+  scratchB.width=tw; scratchB.height=th;
+  const bctx=scratchB.getContext('2d');
+  bctx.imageSmoothingEnabled=true; bctx.imageSmoothingQuality='high';
+  bctx.drawImage(scratchA,0,0,tw,th);
+  const d=bctx.getImageData(0,0,tw,th);
+  return f.rgba
+    ? {rgb:new Uint8Array(d.data), w:tw, h:th, rgba:true, delayMs:f.delayMs}
+    : {rgb:MC.flattenRGBA(d.data,tw,th), w:tw, h:th, rgba:false, delayMs:f.delayMs};
+}
+function encodeGifInWorker(worker, frames, maxColors, dither){
+  return new Promise((res,rej)=>{
+    worker.onmessage=e=>e.data.type==='encoded'?res(e.data.gif):rej(new Error(e.data.message||'encode failed'));
+    worker.onerror=()=>rej(new Error('encode worker failed'));
+    worker.postMessage({cmd:'encode',token:1,frames,maxColors,dither});
+  });
+}
+/* build the reduction ladder from the Size-limit permission checkboxes */
+function buildLadder(){
+  const allowPal=els.permPalette.checked, allowDither=els.permDither.checked;
+  const allowRes=els.permRes.checked, preserveDur=els.permDuration.checked;
+  const steps=[els.permStep2.checked?2:null, els.permStep3.checked?3:null, els.permStep4.checked?4:null].filter(Boolean);
+  const maxStep=steps.length?steps[steps.length-1]:1;
+  const ord=s=>s===2?'2nd':s===3?'3rd':'4th';
+  const dth=c=>allowDither&&allowPal&&c<=64;
+  const L=[{colors:256, dither:false, step:1, scale:1, label:''}];
+  if (allowPal) for (const c of [128,64,32,16])
+    L.push({colors:c, dither:dth(c), step:1, scale:1, label:`${c} colors${dth(c)?' + dithering':''}`});
+  for (const s of steps) for (const c of (allowPal?[32,16]:[256]))
+    L.push({colors:c, dither:dth(c), step:s, scale:1, label:`every ${ord(s)} frame, ${c} colors${dth(c)?' + dithering':''}`});
+  if (allowRes){
+    const rl = maxStep>1?`every ${ord(maxStep)} frame, `:'';
+    L.push({colors:allowPal?16:256, dither:allowDither&&allowPal, step:maxStep, scale:0.75, label:`75% resolution, ${rl}${allowPal?'16 colors'+(allowDither?' + dithering':''):''}`});
+    L.push({colors:allowPal?16:256, dither:allowDither&&allowPal, step:maxStep, scale:0.5, label:`50% resolution, ${rl}${allowPal?'16 colors'+(allowDither?' + dithering':''):''}`});
+    if (allowPal) L.push({colors:8, dither:allowDither, step:maxStep, scale:0.5, label:`50% resolution, ${rl}8 colors${allowDither?' + dithering':''}`});
+  }
+  // drop exact duplicates (e.g. same settings reached via different permissions)
+  return L.filter((e,i)=>i===0||L.findIndex(p=>p.colors===e.colors&&p.dither===e.dither&&p.step===e.step&&p.scale===e.scale)===i);
+}
+/* Download GIF (output card) — always full quality; uses the cached
+   background encode when available */
+els.dlGif.addEventListener('click', async ()=>{
+  if(!state.playList||!state.lastSettings)return;
+  const btn=els.dlGif, old=btn.innerHTML;
+  btn.disabled=true; btn.innerHTML='encoding…';
+  try{
+    if(!(state.fullGif&&state.fullGif.gif)){
+      const copies=state.playList.map(f=>({rgb:f.rgb.slice().buffer,w:f.w,h:f.h,delayMs:f.delayMs,rgba:f.rgba}));
+      const w=makeWorker(); if(!w) throw new Error('worker unavailable');
+      const gif=await encodeGifInWorker(w,copies,256,false).finally(()=>w.terminate());
+      state.fullGif={gif,bytes:gif.byteLength};
+    }
+    triggerDownload(new Blob([state.fullGif.gif],{type:'image/gif'}),buildOutName('.gif'));
+    setStatus(`gif encoded — ${fmtSize(state.fullGif.bytes)}`,'ok');
+  }catch(err){
+    console.error(err);
+    setStatus('gif encode failed: '+(err.message||err),'err');
+  }finally{
+    btn.innerHTML=old; btn.disabled=false;
+  }
+});
+
+/* ================= size-limited GIF card ================= */
+function clearOptimized(){
+  state.optimized=null; state.fitSeq++;
+  optPlayer.stop();
+  els.optCanvas.hidden=true; els.optStage.classList.remove('filled','dimmed');
+  els.optProg.classList.remove('on');
+  els.optMeta.textContent=''; els.dlOpt.disabled=true;
+}
+function maybeAutoFit(){
+  if (state.playList && parseInt(els.maxSize.value,10)>0) runFit();
+  else clearOptimized();
+}
+async function runFit(){
+  if (!state.playList) return;
+  const limitKB=Math.max(0, parseInt(els.maxSize.value,10)||0);
+  if (limitKB<=0){ clearOptimized(); return; }
+  const limit=limitKB*1024, preserveDur=els.permDuration.checked;
+  const seq=++state.fitSeq;
+  state.optimized=null; els.dlOpt.disabled=true;
+  els.optStage.classList.add('dimmed'); els.optProg.classList.add('on');
+  els.optMeta.textContent='fitting…';
+  state.runningFit=true;
+  const worker=makeWorker();
+  try{
+    if(!worker) throw new Error('worker unavailable');
+    const ladder=buildLadder();
+    let best=null, bestFrames=null;
+    for (let li=0; li<ladder.length; li++){
+      if (seq!==state.fitSeq) return; // superseded by a new carve/refit
+      const a=ladder[li];
+      els.optLabel.textContent=`pass ${li+1}/${ladder.length} — ${a.label||'full quality'}`;
+      els.optPct.textContent=Math.round(li/ladder.length*100)+'%';
+      els.optBar.style.width=(li/ladder.length*100).toFixed(0)+'%';
+      let frames=state.playList;
+      if (a.scale!==1) frames=frames.map(f=>downscaleFrame(f,a.scale));
+      frames=skipFrames(frames,a.step,preserveDur);
+      const copies=frames.map(f=>({rgb:f.rgb.slice().buffer,w:f.w,h:f.h,delayMs:f.delayMs,rgba:f.rgba}));
+      const gif=await encodeGifInWorker(worker,copies,a.colors,a.dither);
+      const entry={bytes:gif.byteLength,gif,desc:a.label};
+      if (!best || entry.bytes<best.bytes){ best=entry; bestFrames=frames; }
+      if (entry.bytes<=limit){ best=entry; bestFrames=frames; break; }
+    }
+    if (seq!==state.fitSeq || !state.playList) return;
+    state.optimized={gif:best.gif, bytes:best.bytes, desc:best.desc};
+    optPlayer.load(bestFrames.map(f=>({...f})),true);
+    const saved=state.fullGif?` · −${Math.max(0,Math.round((1-best.bytes/state.fullGif.bytes)*100))}%`:'';
+    els.optMeta.textContent=`${fmtSize(best.bytes)}${saved}${best.desc?' · '+best.desc:''} · ${bestFrames.length}f`;
+    els.dlOpt.disabled=false;
+    els.optLabel.textContent=best.bytes<=limit?'fits':'closest';
+    els.optPct.textContent=''; els.optBar.style.width='100%';
+  }catch(err){
+    console.error(err);
+    if (seq===state.fitSeq){
+      els.optMeta.textContent='fit failed';
+      setStatus('fit failed: '+(err.message||err),'err');
+    }
+  }finally{
+    if (worker) worker.terminate();
+    state.runningFit=false;
+    if (seq===state.fitSeq){
+      els.optStage.classList.remove('dimmed');
+      els.optProg.classList.remove('on');
+    }
+  }
+}
+els.dlOpt.addEventListener('click', ()=>{
+  if(!state.optimized)return;
+  triggerDownload(new Blob([state.optimized.gif],{type:'image/gif'}),buildOutName('.gif'));
+});
+let fitTimer=null;
+function scheduleFit(){
+  if(!state.playList) return;
+  clearTimeout(fitTimer);
+  fitTimer=setTimeout(()=>{ if(parseInt(els.maxSize.value,10)>0) runFit(); else clearOptimized(); },700);
+}
+els.maxSize.addEventListener('input',scheduleFit);
+[els.permPalette,els.permDither,els.permStep2,els.permStep3,els.permStep4,els.permDuration,els.permRes]
+  .forEach(c=>c.addEventListener('change',scheduleFit));
+els.dlZip.addEventListener('click', async ()=>{
+  if(!state.results)return;
+  const btn=els.dlZip, old=btn.innerHTML;
+  btn.disabled=true; btn.innerHTML='zipping…';
+  try{
+    const files=[];
+    for(let i=0;i<state.results.length;i++){
+      const f=state.results[i];
+      scratchB.width=f.w; scratchB.height=f.h;
+      putFrame(scratchB.getContext('2d'),f);
+      const blob=await new Promise(r=>scratchB.toBlob(r,'image/png'));
+      if(!blob) throw new Error('frame '+i+' failed to encode');
+      files.push({name:`out_${String(i).padStart(3,'0')}.png`,data:new Uint8Array(await blob.arrayBuffer())});
+    }
+    triggerDownload(new Blob(MC.buildZip(files),{type:'application/zip'}),buildOutName('_frames.zip'));
+    setStatus(`zipped ${files.length} frames`,'ok');
+  }catch(err){
+    console.error(err);
+    setStatus('zip failed: '+(err.message||err),'err');
+  }finally{
+    btn.innerHTML=old; btn.disabled=!state.results;
+  }
+});
+
+/* render one playlist frame to a canvas and encode it via the browser */
+async function renderFrameBlob(f, type, quality){
+  scratchB.width=f.w; scratchB.height=f.h;
+  putFrame(scratchB.getContext('2d'), f);
+  return await new Promise(r=>scratchB.toBlob(r,type,quality));
+}
+
+/* Animated PNG (APNG): browser encodes each frame as PNG, we repackage
+   the IDAT streams into acTL/fcTL/fdAT containers. */
+els.dlPng.addEventListener('click', async ()=>{
+  if(!state.playList)return;
+  const btn=els.dlPng, old=btn.innerHTML;
+  btn.disabled=true; btn.innerHTML='encoding…';
+  try{
+    const frames=[];
+    for(const f of state.playList){
+      const blob=await renderFrameBlob(f,'image/png');
+      frames.push({data:MC.extractPngIDAT(await blob.arrayBuffer()), delayMs:f.delayMs});
+    }
+    const parts=MC.buildAPNG(frames,state.playList[0].w,state.playList[0].h);
+    triggerDownload(new Blob(parts,{type:'image/png'}),buildOutName('.png'));
+  }catch(err){
+    setStatus('png encode failed: '+(err.message||err),'err');
+  }finally{
+    btn.innerHTML=old; btn.disabled=false;
+  }
+});
+
+/* Animated WebP: browser encodes each frame as a single-frame WebP, we
+   extract the VP8/VP8L/ALPH chunks and re-container them with ANMF/ANIM. */
+let webpSupported=false;
+(async ()=>{
+  try{
+    const c=document.createElement('canvas'); c.width=c.height=2;
+    const blob=await new Promise(r=>c.toBlob(r,'image/webp',0.8));
+    webpSupported=!!blob && blob.type==='image/webp';
+  }catch{ webpSupported=false; }
+  if(!webpSupported){
+    els.dlWebp.title='Animated WebP encoding is not supported by this browser';
+  }
+})();
+els.dlWebp.addEventListener('click', async ()=>{
+  if(!state.playList)return;
+  const btn=els.dlWebp, old=btn.innerHTML;
+  btn.disabled=true; btn.innerHTML='encoding…';
+  try{
+    const frames=[];
+    for(const f of state.playList){
+      const blob=await renderFrameBlob(f,'image/webp',0.92);
+      if(!blob || blob.type!=='image/webp') throw new Error('browser refused to encode WebP');
+      const chunks=MC.parseRiffChunks(await blob.arrayBuffer())
+        .filter(c=>c.fourcc==='VP8 '||c.fourcc==='VP8L'||c.fourcc==='ALPH');
+      if(!chunks.length) throw new Error('unexpected WebP structure');
+      frames.push({chunks, durationMs:f.delayMs});
+    }
+    const buf=MC.buildWebPAnim(frames,state.playList[0].w,state.playList[0].h);
+    triggerDownload(new Blob([buf],{type:'image/webp'}),buildOutName('.webp'));
+  }catch(err){
+    setStatus('webp encode failed: '+(err.message||err),'err');
+  }finally{
+    btn.innerHTML=old; btn.disabled=!webpSupported;
+  }
+});
+
+/* transparency toggle: re-decode the current source under the new policy */
+els.trans.addEventListener('change', ()=>{
+  invalidateResult();
+  if (state.file) loadImageFile(state.file);
+});
+
+/* ================= chaos favicon (homage to randomize_icon) ================= */
+const favCanvas=document.createElement('canvas'); favCanvas.width=16; favCanvas.height=16;
+const favCtx=favCanvas.getContext('2d');
+setInterval(()=>{
+  if(!els.chaos.checked||document.hidden)return;
+  const img=favCtx.createImageData(16,16);
+  for(let i=0;i<img.data.length;i+=4){
+    img.data[i]=Math.random()*256|0; img.data[i+1]=Math.random()*256|0; img.data[i+2]=Math.random()*256|0; img.data[i+3]=255;
+  }
+  favCtx.putImageData(img,0,0);
+  els.favicon.href=favCanvas.toDataURL();
+},16);
+</script>
+</body>
+</html>
