@@ -6,7 +6,7 @@ Live demo: [zaapaa.github.io/meme_carver_web/](https://zaapaa.github.io/meme_car
 
 ## Overview
 
-This is a single-file web application. It runs entirely in your browser. No server. No installation. Open `meme-carver.html` in a modern browser.
+This is a single-file web application. It runs entirely in your browser. No server. No installation. Use the live demo above, or open `index.html` in a modern browser.
 
 ## Features
 
@@ -26,7 +26,7 @@ This is a single-file web application. It runs entirely in your browser. No serv
 
 ## How to use
 
-1. Open `meme-carver.html` in a browser (Chrome, Firefox, Edge, Safari).
+1. Open `index.html` in a browser (Chrome, Firefox, Edge, Safari) — or use the live demo.
 2. Drop an image, click to browse, or paste (Ctrl+V). Or click **Load a sample image** / **Load a transparent sample**.
 3. Adjust the settings on the left.
 4. Press **Carve!**
