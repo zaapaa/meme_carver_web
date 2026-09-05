@@ -1,7 +1,7 @@
 # Meme Carver (Web)
 
-Browser port of the seam-carving meme generator.
-Original project: [zaapaa/meme_carver](https://github.com/zaapaa/meme_carver)
+Browser port of the seam-carving meme generator.  
+Original project: [zaapaa/meme_carver](https://github.com/zaapaa/meme_carver)  
 Live demo: [zaapaa.github.io/meme_carver_web/](https://zaapaa.github.io/meme_carver_web/)
 
 ## Overview
